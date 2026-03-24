@@ -101,6 +101,6 @@ SignalSchema.index({ createdAt: -1 })
 SignalSchema.index({ title: 'text', content: 'text', tags: 'text' })
 
 const SignalModel: Model<ISignal> =
-  mongoose.models.Signal ?? mongoose.model<ISignal>('Signal', SignalSchema)
+  (mongoose.models?.['Signal'] as Model<ISignal>) ?? mongoose.model<ISignal>('Signal', SignalSchema)
 
 export default SignalModel

@@ -14,7 +14,7 @@ const CollectionSchema = new Schema(
 )
 
 export const CollectionModel: Model<any> =
-  mongoose.models.Collection ?? mongoose.model('Collection', CollectionSchema)
+  (mongoose.models?.['Collection'] as Model<any>) ?? mongoose.model('Collection', CollectionSchema)
 
 // src/lib/models/Activity — we inline it here too
 const ActivitySchema = new Schema(
@@ -29,4 +29,4 @@ const ActivitySchema = new Schema(
 )
 
 export const ActivityModel: Model<any> =
-  mongoose.models.Activity ?? mongoose.model('Activity', ActivitySchema)
+  (mongoose.models?.['Activity'] as Model<any>) ?? mongoose.model('Activity', ActivitySchema)
