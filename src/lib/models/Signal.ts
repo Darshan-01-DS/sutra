@@ -94,7 +94,6 @@ const SignalSchema = new Schema<ISignal>(
   }
 )
 
-SignalSchema.index({ tags: 1 })
 SignalSchema.index({ topics: 1 })
 SignalSchema.index({ type: 1 })
 SignalSchema.index({ createdAt: -1 })
