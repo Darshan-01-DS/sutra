@@ -3,6 +3,7 @@ import mongoose, { Schema, Document, Model } from 'mongoose'
 import { SignalType } from '@/types'
 
 export interface ISignal extends Document {
+  userId: string
   type: SignalType
   title: string
   url?: string
@@ -55,6 +56,7 @@ const HighlightSchema = new Schema({
 
 const SignalSchema = new Schema<ISignal>(
   {
+    userId:        { type: String, index: true },
     type:          { type: String, enum: ['article','tweet','video','pdf','image','note','link'], required: true },
     title:         { type: String, required: true, maxlength: 500 },
     url:           { type: String, index: true },

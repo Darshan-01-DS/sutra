@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import SignalModel from '@/lib/models/Signal'
+import { auth } from '@/auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -10,9 +11,13 @@ export async function GET(req: NextRequest) {
   try {
     await connectDB()
 
+    const session = await auth()
+    const userId = session?.user?.id
+    const userFilter: Record<string, any> = userId ? { userId } : {}
+
     // 1. Manually added queue
     const manualQueue = await SignalModel.find(
-      { addedToResurface: true },
+      { addedToResurface: true, ...userFilter },
       { _id: 1, title: 1, type: 1, url: 1, content: 1, source: 1, tags: 1, summary: 1, resurfaceNote: 1, resurfaceAt: 1, createdAt: 1 }
     ).sort({ resurfaceAt: 1, createdAt: -1 }).lean()
 
@@ -27,7 +32,8 @@ export async function GET(req: NextRequest) {
       $or: [
         { lastViewedAt: { $lt: sevenDaysAgo } },
         { lastViewedAt: { $exists: false } }
-      ]
+      ],
+      ...userFilter
     })
       .select({ _id: 1, title: 1, type: 1, url: 1, content: 1, source: 1, tags: 1, summary: 1, createdAt: 1 })
       .sort({ createdAt: -1 })

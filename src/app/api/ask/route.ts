@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import SignalModel from '@/lib/models/Signal'
 import { getEmbeddingWithKey, cosineSimilarity } from '@/lib/scraper'
+import { auth } from '@/auth'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -11,6 +12,10 @@ export const revalidate = 0
 export async function POST(req: NextRequest) {
   try {
     await connectDB()
+
+    const session = await auth()
+    const userId = session?.user?.id
+    const userFilter: Record<string, any> = userId ? { userId } : {}
 
     const body = await req.json()
     const { question } = body
@@ -27,7 +32,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Text-search fallback (always try this first if no key or embeddings)
     const textSearchResults = await SignalModel.find(
-      { $text: { $search: question.trim() } },
+      { $text: { $search: question.trim() }, ...userFilter },
       { score: { $meta: 'textScore' }, _id: 1, title: 1, content: 1, url: 1, source: 1, tags: 1, type: 1, summary: 1, embedding: 1 }
     )
       .sort({ score: { $meta: 'textScore' } })
@@ -71,7 +76,7 @@ export async function POST(req: NextRequest) {
     
     // 4. Retrieve top-k most relevant signals via cosine similarity
     const allSignals = await SignalModel.find(
-      { embedding: { $exists: true, $not: { $size: 0 } } },
+      { embedding: { $exists: true, $not: { $size: 0 } }, ...userFilter },
       { _id: 1, title: 1, content: 1, url: 1, source: 1, tags: 1, type: 1, embedding: 1, summary: 1 }
     ).lean()
 
@@ -102,7 +107,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // 3. Build context from retrieved signals
+    // 5. Build context from retrieved signals
     const context = scored
       .map((s, i) => {
         const text = s.summary || s.content || s.title
@@ -110,7 +115,7 @@ export async function POST(req: NextRequest) {
       })
       .join('\n\n---\n\n')
 
-    // 4. Generate answer using custom or default model
+    // 6. Generate answer using custom or default model
     const { default: OpenAI } = await import('openai')
     const openai = new OpenAI({ 
       apiKey: key,

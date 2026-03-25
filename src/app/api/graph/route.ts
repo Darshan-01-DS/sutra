@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import SignalModel from '@/lib/models/Signal'
 import { computeSimilarity } from '@/lib/similarity'
+import { auth } from '@/auth'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -10,11 +11,17 @@ export const revalidate = 0
 export async function GET(req: NextRequest) {
   await connectDB()
 
+  const session = await auth()
+  const userId = session?.user?.id
+
   const focusId = req.nextUrl.searchParams.get('focusId')
+
+  const filter: Record<string, any> = {}
+  if (userId) filter.userId = userId
 
   // Fetch recent 100 signals with embeddings
   const signals = await SignalModel.find(
-    {},
+    filter,
     { _id: 1, title: 1, type: 1, tags: 1, topics: 1, source: 1, embedding: 1 }
   ).sort({ createdAt: -1 }).limit(100).lean()
 

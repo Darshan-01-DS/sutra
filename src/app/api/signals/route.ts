@@ -7,6 +7,7 @@ import { scrapeUrl, autoTag, getEmbeddingWithKey, cosineSimilarity } from '@/lib
 import { detectTypeFromUrl } from '@/lib/utils'
 import { SignalType } from '@/types'
 import { initialSM2State } from '@/lib/sm2'
+import { auth } from '@/auth'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -14,6 +15,9 @@ export const revalidate = 0
 // ── GET /api/signals ─────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   await connectDB()
+
+  const session = await auth()
+  const userId = session?.user?.id
 
   const { searchParams } = req.nextUrl
   const page    = parseInt(searchParams.get('page') ?? '1')
@@ -26,6 +30,7 @@ export async function GET(req: NextRequest) {
   const sort    = searchParams.get('sort') ?? 'newest'
 
   const filter: Record<string, any> = {}
+  if (userId) filter.userId = userId
   if (type)  filter.type = type
   if (tag) {
     filter.$or = [
@@ -67,6 +72,9 @@ export async function POST(req: NextRequest) {
   try {
     await connectDB()
 
+    const session = await auth()
+    const userId = session?.user?.id
+
     const body = await req.json()
     const { url, content, title: manualTitle, type: manualType } = body
     const aiConfig = {
@@ -103,12 +111,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'url or content required' }, { status: 400 })
     }
 
-    // AI auto-tagging + embedding (in parallel)
+    // Attach userId
+    if (userId) signalData.userId = userId
+
+    // AI auto-tagging + embedding (in parallel, gracefully optional)
     const textForAI = `${signalData.title} ${signalData.content ?? ''}`.trim()
-    const [{ tags, topics }, embedding] = await Promise.all([
-      autoTag(signalData.title, signalData.content, aiConfig),
-      getEmbeddingWithKey(textForAI, aiConfig),
-    ])
+    let tags: string[] = []
+    let topics: string[] = []
+    let embedding: number[] = []
+
+    try {
+      const [tagResult, embedResult] = await Promise.all([
+        autoTag(signalData.title, signalData.content, aiConfig),
+        getEmbeddingWithKey(textForAI, aiConfig),
+      ])
+      tags = tagResult.tags
+      topics = tagResult.topics
+      embedding = embedResult
+    } catch {
+      // AI features are optional — don't fail the save
+    }
 
     signalData.tags = tags
     signalData.topics = topics
@@ -116,18 +138,25 @@ export async function POST(req: NextRequest) {
 
     // Find related signals via cosine similarity
     if (embedding.length) {
-      const allSignals = await SignalModel.find(
-        { embedding: { $exists: true, $not: { $size: 0 } } },
-        { _id: 1, embedding: 1 }
-      ).lean()
+      try {
+        const relatedFilter: Record<string, any> = { embedding: { $exists: true, $not: { $size: 0 } } }
+        if (userId) relatedFilter.userId = userId
 
-      const scored = allSignals
-        .map(s => ({ id: s._id, score: cosineSimilarity(embedding, s.embedding ?? []) }))
-        .filter(s => s.score > 0.75)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5)
+        const allSignals = await SignalModel.find(
+          relatedFilter,
+          { _id: 1, embedding: 1 }
+        ).lean()
 
-      signalData.relatedIds = scored.map(s => s.id)
+        const scored = allSignals
+          .map(s => ({ id: s._id, score: cosineSimilarity(embedding, s.embedding ?? []) }))
+          .filter(s => s.score > 0.75)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 5)
+
+        signalData.relatedIds = scored.map(s => s.id)
+      } catch {
+        // Skip related signals on error
+      }
     }
 
     // Initialize SM-2 state for this new signal
@@ -160,6 +189,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ...signal.toJSON(), _id: String(signal._id) }, { status: 201 })
   } catch (e: any) {
+    console.error('Save signal error:', e)
     return NextResponse.json(
       { error: 'Failed to save signal', details: e?.message ? String(e.message) : 'Unknown server error' },
       { status: 500 }

@@ -4,6 +4,7 @@ import { connectDB } from '@/lib/mongodb'
 import SignalModel from '@/lib/models/Signal'
 import { ActivityModel } from '@/lib/models/Collection'
 import { sm2Review, estimateQuality } from '@/lib/sm2'
+import { auth } from '@/auth'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -13,8 +14,16 @@ type Params = { params: { id: string } }
 export async function GET(_req: NextRequest, { params }: Params) {
   await connectDB()
 
+  const session = await auth()
+  const userId = session?.user?.id
+
   const signal = await SignalModel.findById(params.id).lean()
   if (!signal) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // If signal has a userId, verify ownership
+  if ((signal as any).userId && userId && (signal as any).userId !== userId) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
 
   // Increment view count + advance SM-2 schedule
   const daysAgo = Math.floor(
@@ -60,6 +69,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
 export async function PATCH(req: NextRequest, { params }: Params) {
   await connectDB()
 
+  const session = await auth()
+  const userId = session?.user?.id
+
+  // Verify ownership
+  const existing = await SignalModel.findById(params.id).lean()
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if ((existing as any).userId && userId && (existing as any).userId !== userId) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
   const body = await req.json()
   const allowedFields = ['title', 'content', 'tags', 'topics', 'isFavorite', 'highlights', 'collectionIds', 'summary', 'addedToResurface', 'resurfaceNote']
   const update: Record<string, any> = {}
@@ -91,8 +110,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 export async function DELETE(_req: NextRequest, { params }: Params) {
   await connectDB()
 
-  const signal = await SignalModel.findByIdAndDelete(params.id)
-  if (!signal) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const session = await auth()
+  const userId = session?.user?.id
 
+  const signal = await SignalModel.findById(params.id).lean()
+  if (!signal) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if ((signal as any).userId && userId && (signal as any).userId !== userId) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  await SignalModel.findByIdAndDelete(params.id)
   return NextResponse.json({ success: true })
 }

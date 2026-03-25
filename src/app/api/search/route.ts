@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import SignalModel from '@/lib/models/Signal'
 import { getEmbedding, cosineSimilarity } from '@/lib/scraper'
+import { auth } from '@/auth'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -10,13 +11,18 @@ export const revalidate = 0
 export async function GET(req: NextRequest) {
   await connectDB()
 
+  const session = await auth()
+  const userId = session?.user?.id
+
   const q = req.nextUrl.searchParams.get('q')?.trim()
   if (!q) return NextResponse.json({ data: [], total: 0 })
+
+  const userFilter: Record<string, any> = userId ? { userId } : {}
 
   // Keyword search via MongoDB text index
   const [keywordResults, queryEmbedding] = await Promise.all([
     SignalModel.find(
-      { $text: { $search: q } },
+      { $text: { $search: q }, ...userFilter },
       { score: { $meta: 'textScore' } }
     )
       .sort({ score: { $meta: 'textScore' } })
@@ -29,7 +35,7 @@ export async function GET(req: NextRequest) {
   let semanticResults: any[] = []
   if (queryEmbedding.length) {
     const allWithEmbeddings = await SignalModel.find(
-      { embedding: { $exists: true, $not: { $size: 0 } } },
+      { embedding: { $exists: true, $not: { $size: 0 } }, ...userFilter },
       { embedding: 1, title: 1, type: 1, tags: 1, source: 1, createdAt: 1, thumbnail: 1, isFavorite: 1 }
     ).lean()
 

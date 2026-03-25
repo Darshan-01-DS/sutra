@@ -7,6 +7,7 @@ import { uploadToImageKit } from '@/lib/imagekit'
 import { autoTag, getEmbeddingWithKey, cosineSimilarity } from '@/lib/scraper'
 import { SignalType } from '@/types'
 import { initialSM2State } from '@/lib/sm2'
+import { auth } from '@/auth'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -27,9 +28,17 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+// Convert file buffer to Base64 data URI (fallback when ImageKit is unavailable)
+function toBase64DataUri(buffer: Buffer, mimeType: string): string {
+  return `data:${mimeType};base64,${buffer.toString('base64')}`
+}
+
 export async function POST(req: NextRequest) {
   try {
     await connectDB()
+
+    const session = await auth()
+    const userId = session?.user?.id
 
     const formData = await req.formData()
     const file = formData.get('file') as File | null
@@ -38,17 +47,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
-    // Validate file size (max 25MB)
-    if (file.size > 25 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File too large (max 25MB)' }, { status: 400 })
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: 'File too large (max 10MB)' }, { status: 400 })
     }
 
-    // Convert File to Buffer for ImageKit
+    // Convert File to Buffer
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
-    // Upload to ImageKit
-    const uploaded = await uploadToImageKit(buffer, file.name)
+    // Try ImageKit upload, fallback to Base64
+    let fileUrl = ''
+    let fileId = ''
+    let thumbnailUrl = ''
+
+    try {
+      const uploaded = await uploadToImageKit(buffer, file.name)
+      fileUrl = uploaded.url
+      fileId = uploaded.fileId
+      thumbnailUrl = uploaded.thumbnailUrl
+    } catch (uploadErr: any) {
+      console.warn('ImageKit upload failed, using Base64 fallback:', uploadErr.message)
+      // Fallback: store as Base64 data URI (works for files up to ~5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: 'File too large for fallback storage (max 5MB without ImageKit)' }, { status: 400 })
+      }
+      fileUrl = toBase64DataUri(buffer, file.type)
+      fileId = `local_${Date.now()}`
+      thumbnailUrl = file.type.startsWith('image/') ? fileUrl : ''
+    }
 
     const signalType = detectSignalType(file.type, file.name)
     const notes = formData.get('notes') as string | null
@@ -59,25 +86,37 @@ export async function POST(req: NextRequest) {
       model: req.headers.get('x-ai-model') ?? undefined,
     }
 
-    // AI auto-tag based on filename + type
+    // AI auto-tag (gracefully optional)
     const textForAI = `File: ${file.name} (${signalType}, ${formatSize(file.size)})${notes ? '\n' + notes : ''}`
-    const [{ tags, topics }, embedding] = await Promise.all([
-      autoTag(file.name, `Uploaded ${signalType} file: ${file.name}${notes ? '. Notes: ' + notes : ''}`, aiConfig),
-      getEmbeddingWithKey(textForAI, aiConfig),
-    ])
+    let tags: string[] = []
+    let topics: string[] = []
+    let embedding: number[] = []
+
+    try {
+      const [tagResult, embedResult] = await Promise.all([
+        autoTag(file.name, `Uploaded ${signalType} file: ${file.name}${notes ? '. Notes: ' + notes : ''}`, aiConfig),
+        getEmbeddingWithKey(textForAI, aiConfig),
+      ])
+      tags = tagResult.tags
+      topics = tagResult.topics
+      embedding = embedResult
+    } catch {
+      // AI features optional
+    }
 
     // Build signal data
     const contentParts = [`Uploaded file: ${file.name} (${formatSize(file.size)})`]
     if (notes) contentParts.push(`\n\n— User notes —\n${notes}`)
 
     const signalData: any = {
+      userId,
       type: signalType,
       title: file.name,
       content: contentParts.join(''),
       source: 'upload',
-      thumbnail: signalType === 'image' ? uploaded.thumbnailUrl : undefined,
-      fileUrl: uploaded.url,
-      fileId: uploaded.fileId,
+      thumbnail: signalType === 'image' ? thumbnailUrl : undefined,
+      fileUrl,
+      fileId,
       fileSize: file.size,
       tags,
       topics,
@@ -86,18 +125,25 @@ export async function POST(req: NextRequest) {
 
     // Find related signals
     if (embedding.length) {
-      const allSignals = await SignalModel.find(
-        { embedding: { $exists: true, $not: { $size: 0 } } },
-        { _id: 1, embedding: 1 }
-      ).lean()
+      try {
+        const relatedFilter: Record<string, any> = { embedding: { $exists: true, $not: { $size: 0 } } }
+        if (userId) relatedFilter.userId = userId
 
-      const scored = allSignals
-        .map(s => ({ id: s._id, score: cosineSimilarity(embedding, s.embedding ?? []) }))
-        .filter(s => s.score > 0.75)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5)
+        const allSignals = await SignalModel.find(
+          relatedFilter,
+          { _id: 1, embedding: 1 }
+        ).lean()
 
-      signalData.relatedIds = scored.map(s => s.id)
+        const scored = allSignals
+          .map(s => ({ id: s._id, score: cosineSimilarity(embedding, s.embedding ?? []) }))
+          .filter(s => s.score > 0.75)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 5)
+
+        signalData.relatedIds = scored.map(s => s.id)
+      } catch {
+        // Skip
+      }
     }
 
     // Initialize SM-2 state

@@ -1,9 +1,10 @@
 // src/app/api/clusters/route.ts
 // Auto-clustering of signals using embedding similarity
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import SignalModel from '@/lib/models/Signal'
 import { cosineSimilarity } from '@/lib/scraper'
+import { auth } from '@/auth'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -21,12 +22,18 @@ const CLUSTER_COLORS = [
   '#F7B731', '#A29BFE', '#FD79A8', '#00CEC9', '#E17055',
 ]
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     await connectDB()
 
+    const session = await auth()
+    const userId = session?.user?.id
+
+    const filter: Record<string, any> = { embedding: { $exists: true, $not: { $size: 0 } } }
+    if (userId) filter.userId = userId
+
     const signals = await SignalModel.find(
-      { embedding: { $exists: true, $not: { $size: 0 } } },
+      filter,
       { _id: 1, title: 1, type: 1, topics: 1, tags: 1, embedding: 1 }
     )
       .sort({ createdAt: -1 })

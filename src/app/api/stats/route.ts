@@ -1,31 +1,41 @@
 // src/app/api/stats/route.ts
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import SignalModel from '@/lib/models/Signal'
 import { ActivityModel } from '@/lib/models/Collection'
 import { isDueForReview, sm2Review, estimateQuality } from '@/lib/sm2'
+import { auth } from '@/auth'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   await connectDB()
+
+  const session = await auth()
+  const userId = session?.user?.id
+  const userFilter: Record<string, any> = userId ? { userId } : {}
 
   const now = new Date()
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
   const [total, thisWeek, byTypeAgg, tagsAgg, topicsAgg, recentActivity, candidatesForResuface] =
     await Promise.all([
-      SignalModel.countDocuments(),
-      SignalModel.countDocuments({ createdAt: { $gte: weekAgo } }),
-      SignalModel.aggregate([{ $group: { _id: '$type', count: { $sum: 1 } } }]),
+      SignalModel.countDocuments(userFilter),
+      SignalModel.countDocuments({ createdAt: { $gte: weekAgo }, ...userFilter }),
       SignalModel.aggregate([
+        ...(userId ? [{ $match: { userId } }] : []),
+        { $group: { _id: '$type', count: { $sum: 1 } } }
+      ]),
+      SignalModel.aggregate([
+        ...(userId ? [{ $match: { userId } }] : []),
         { $unwind: '$tags' },
         { $group: { _id: '$tags', count: { $sum: 1 }, signals: { $push: '$_id' } } },
         { $sort: { count: -1 } },
         { $limit: 30 },
       ]),
       SignalModel.aggregate([
+        ...(userId ? [{ $match: { userId } }] : []),
         {
           $project: {
             topics: {
@@ -56,7 +66,7 @@ export async function GET() {
       ]),
       ActivityModel.find().sort({ createdAt: -1 }).limit(20).lean(),
       SignalModel.find(
-        {},
+        userFilter,
         {
           _id: 1, title: 1, type: 1, tags: 1,
           createdAt: 1, lastViewedAt: 1, source: 1,
@@ -135,4 +145,3 @@ export async function GET() {
     resurface: resurfaceCandidates,
   })
 }
-
