@@ -1,6 +1,6 @@
 // src/app/layout.tsx
 import type { Metadata } from 'next'
-import { Instrument_Serif } from 'next/font/google'
+import { Instrument_Serif, Cormorant_Garamond, DM_Mono } from 'next/font/google'
 import './globals.css'
 
 const instrumentSerif = Instrument_Serif({
@@ -8,6 +8,21 @@ const instrumentSerif = Instrument_Serif({
   weight: ['400'],
   style: ['normal', 'italic'],
   variable: '--font-serif',
+})
+
+const cormorantGaramond = Cormorant_Garamond({
+  subsets: ['latin'],
+  weight: ['300', '400', '500'],
+  style: ['normal', 'italic'],
+  variable: '--font-cormorant',
+  display: 'swap',
+})
+
+const dmMono = DM_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-dm-mono',
+  display: 'swap',
 })
 
 export const metadata: Metadata = {
@@ -19,7 +34,7 @@ import { SessionProvider } from 'next-auth/react'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={instrumentSerif.variable}>
+    <html lang="en" className={`${instrumentSerif.variable} ${cormorantGaramond.variable} ${dmMono.variable}`}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link

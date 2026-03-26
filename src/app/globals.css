@@ -35,6 +35,8 @@
   --font-serif:   'Instrument Serif', Georgia, serif;
   --font-body:    'Geist', system-ui, sans-serif;
   --font-mono:    'Geist Mono', monospace;
+  --font-cormorant: 'Cormorant Garamond', Georgia, serif;
+  --font-dm-mono:   'DM Mono', monospace;
   --sidebar-w:    220px;
   --rpanel-w:     280px;
   --topbar-h:     52px;

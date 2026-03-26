@@ -234,10 +234,6 @@ export function OnboardingModal({ onDone }: OnboardingModalProps) {
 
   return (
     <>
-      {/* Fonts */}
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
-
       <style>{`
         @keyframes ob-blob-float {
           from { transform: translate(0,0) scale(1); }
@@ -263,7 +259,7 @@ export function OnboardingModal({ onDone }: OnboardingModalProps) {
         opacity: visible ? 1 : 0,
         transition: 'opacity 0.6s cubic-bezier(0.4,0,0.2,1)',
         overflow: 'hidden',
-        fontFamily: '"DM Mono", monospace',
+        fontFamily: 'var(--font-dm-mono), monospace',
       }}>
         {/* Grain overlay */}
         <div style={{
@@ -391,7 +387,7 @@ export function OnboardingModal({ onDone }: OnboardingModalProps) {
               onClick={dismiss}
               style={{
                 height: 38, padding: '0 20px', borderRadius: 3,
-                fontFamily: '"DM Mono", monospace', fontSize: 10, letterSpacing: '0.15em',
+                fontFamily: 'var(--font-dm-mono), monospace', fontSize: 10, letterSpacing: '0.15em',
                 textTransform: 'uppercase', cursor: 'pointer', transition: 'all 0.25s ease',
                 background: 'transparent', border: '1px solid rgba(255,255,255,0.12)',
                 color: 'rgba(255,255,255,0.35)',
@@ -404,7 +400,7 @@ export function OnboardingModal({ onDone }: OnboardingModalProps) {
             onClick={next}
             style={{
               height: 38, padding: '0 24px', borderRadius: 3,
-              fontFamily: '"DM Mono", monospace', fontSize: 10, letterSpacing: '0.15em',
+              fontFamily: 'var(--font-dm-mono), monospace', fontSize: 10, letterSpacing: '0.15em',
               textTransform: 'uppercase', cursor: 'pointer', transition: 'all 0.25s ease',
               background: isFinal
                 ? 'linear-gradient(135deg, rgba(201,169,110,0.25), rgba(201,169,110,0.12))'
