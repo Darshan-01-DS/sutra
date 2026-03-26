@@ -79,6 +79,8 @@ export function useSignals(opts: UseSignalsOptions = {}) {
     content?: string
     title?: string
     type?: SignalType
+    tags?: string[]
+    collectionIds?: string[]
   }): Promise<{ signal: Signal | null; error?: string }> => {
     setSaving(true)
     try {

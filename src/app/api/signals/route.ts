@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     const userId = session?.user?.id
 
     const body = await req.json()
-    const { url, content, title: manualTitle, type: manualType } = body
+    const { url, content, title: manualTitle, type: manualType, tags: userTags, collectionIds: userCollectionIds } = body
     const aiConfig = {
       key: req.headers.get('x-openai-api-key') ?? undefined,
       provider: req.headers.get('x-ai-provider') ?? undefined,
@@ -132,9 +132,19 @@ export async function POST(req: NextRequest) {
       // AI features are optional — don't fail the save
     }
 
-    signalData.tags = tags
+    // Merge user-provided tags with AI-generated tags (user tags take priority)
+    const mergedTags = Array.from(new Set([
+      ...(Array.isArray(userTags) ? userTags.map((t: string) => t.trim().toLowerCase()).filter(Boolean) : []),
+      ...tags,
+    ]))
+    signalData.tags = mergedTags
     signalData.topics = topics
     signalData.embedding = embedding
+
+    // Attach user-provided collectionIds
+    if (Array.isArray(userCollectionIds) && userCollectionIds.length > 0) {
+      signalData.collectionIds = userCollectionIds
+    }
 
     // Find related signals via cosine similarity
     if (embedding.length) {
@@ -167,6 +177,19 @@ export async function POST(req: NextRequest) {
     signalData.sm2NextReviewAt = sm2.nextReviewAt
 
     const signal = await SignalModel.create(signalData)
+
+    // Update collection signal lists if collectionIds were provided
+    if (Array.isArray(userCollectionIds) && userCollectionIds.length > 0) {
+      const { CollectionModel } = await import('@/lib/models/Collection')
+      await Promise.all(
+        userCollectionIds.map((colId: string) =>
+          CollectionModel.findOneAndUpdate(
+            { _id: colId, userId },
+            { $addToSet: { signalIds: signal._id } }
+          ).catch(() => null)
+        )
+      )
+    }
 
     // Log activity
     await ActivityModel.create({

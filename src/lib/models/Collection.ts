@@ -3,6 +3,7 @@ import mongoose, { Schema, Model } from 'mongoose'
 
 const CollectionSchema = new Schema(
   {
+    userId:      { type: String, index: true },  // MongoDB User _id as string
     name:        { type: String, required: true, maxlength: 100 },
     description: { type: String, maxlength: 500 },
     signalIds:   { type: [Schema.Types.ObjectId], ref: 'Signal', default: [] },
@@ -16,7 +17,7 @@ const CollectionSchema = new Schema(
 export const CollectionModel: Model<any> =
   (mongoose.models?.['Collection'] as Model<any>) ?? mongoose.model('Collection', CollectionSchema)
 
-// src/lib/models/Activity — we inline it here too
+// Activity model — inlined here
 const ActivitySchema = new Schema(
   {
     type:        { type: String, enum: ['saved','tagged','linked','viewed','highlighted','cluster_grew'], required: true },

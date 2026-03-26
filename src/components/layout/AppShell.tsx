@@ -16,6 +16,7 @@ import { useHotkeys } from 'react-hotkeys-hook'
 import type { Collection, Signal, SignalType } from '@/types'
 import { SignalDetailDrawer } from '@/components/signals/SignalDetailDrawer'
 import { FullScreenGraph } from '@/components/panels/FullScreenGraph'
+import { OnboardingModal } from '@/components/OnboardingModal'
 
 export function AppShell() {
   const router = useRouter()
@@ -36,6 +37,7 @@ export function AppShell() {
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null)
   const [graphFullscreenOpen, setGraphFullscreenOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
 
   const [apiKey, setApiKey] = useState('')
   const [theme, setTheme] = useState<'default' | 'violet' | 'teal' | 'coral'>('default')
@@ -80,6 +82,13 @@ export function AppShell() {
     window.addEventListener('sutra-toast', handleToast)
     return () => window.removeEventListener('sutra-toast', handleToast)
   }, [addToast])
+
+  // Check onboarding on mount
+  useEffect(() => {
+    fetch('/api/user/profile').then(r => r.json()).then((u: any) => {
+      if (u && u.hasSeenOnboarding === false) setShowOnboarding(true)
+    }).catch(() => {})
+  }, [])
 
   const { signals, total, loading, hasMore, loadMore, refresh, saving, saveSignal, uploadFile } = useSignals({
     type:  activeType === 'all' ? undefined : activeType,
@@ -191,25 +200,30 @@ export function AppShell() {
     setActiveCardId(signals[0]._id)
   }, [signals, activeCardId])
 
-  const handleSave = useCallback(async (data: { url?: string; content?: string; title?: string; type?: SignalType }) => {
+  const handleSave = useCallback(async (data: {
+    url?: string; content?: string; title?: string; type?: SignalType
+    tags?: string[]; collectionIds?: string[]
+  }) => {
     const result = await saveSignal(data)
     if (result.signal) {
       addToast('Signal saved ✦', 'success')
       refreshStats()
+      if (data.collectionIds?.length) refreshCollections()
     } else {
       addToast(result.error ?? 'Failed to save signal', 'error')
     }
-  }, [saveSignal, addToast, refreshStats])
+  }, [saveSignal, addToast, refreshStats, refreshCollections])
 
-  const handleUploadFile = useCallback(async (file: File, notes?: string) => {
+  const handleUploadFile = useCallback(async (file: File, notes?: string, tags?: string[], collectionIds?: string[]) => {
     const result = await uploadFile(file, notes)
     if (result.signal) {
       addToast('File uploaded ✦', 'success')
       refreshStats()
+      if (collectionIds?.length) refreshCollections()
     } else {
       addToast(result.error ?? 'Failed to upload file', 'error')
     }
-  }, [uploadFile, addToast, refreshStats])
+  }, [uploadFile, addToast, refreshStats, refreshCollections])
 
   const openDrawer = useCallback(async (id: string) => {
     setActiveCardId(id)
@@ -420,6 +434,16 @@ export function AppShell() {
               setActiveType('all')
             }
           }}
+          onCreateCollection={async (name, emoji) => {
+            const res = await fetch('/api/collections', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name, icon: emoji, color: '#C9A96E' }),
+            })
+            const created = await res.json()
+            await refreshCollections()
+            return created
+          }}
         />
         <RightPanel
           tab={rpTab}
@@ -472,6 +496,10 @@ export function AppShell() {
           setGraphFullscreenOpen(false)
         }}
       />
+
+      {showOnboarding && (
+        <OnboardingModal onDone={() => setShowOnboarding(false)} />
+      )}
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </>

@@ -12,14 +12,16 @@ export async function GET(req: NextRequest) {
 
   const session = await auth()
   const userId = session?.user?.id
+  const q = req.nextUrl.searchParams.get('q')?.trim().toLowerCase()
 
   const pipeline: any[] = []
   if (userId) pipeline.push({ $match: { userId } })
   pipeline.push(
     { $unwind: '$tags' },
+    ...(q ? [{ $match: { tags: { $regex: `^${q}`, $options: 'i' } } }] : []),
     { $group: { _id: '$tags', count: { $sum: 1 } } },
     { $sort: { count: -1 } },
-    { $limit: 30 },
+    { $limit: q ? 8 : 30 },
   )
 
   const agg = await SignalModel.aggregate(pipeline)

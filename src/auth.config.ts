@@ -5,14 +5,15 @@ export const authConfig = {
   pages: { signIn: '/login', error: '/login' },
   callbacks: {
     async session({ session, token }) {
-      if (session.user && token.sub) {
-        session.user.id = token.sub
+      if (session.user && token.userId) {
+        session.user.id = token.userId as string
       }
       return session
     },
     async jwt({ token, user }) {
-      if (user) {
-        token.sub = user.id
+      // Only runs on initial sign-in for credentials provider
+      if (user?.id) {
+        token.userId = user.id
       }
       return token
     },

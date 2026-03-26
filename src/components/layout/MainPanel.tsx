@@ -24,7 +24,7 @@ interface MainPanelProps {
   title: string
   subtitle: string
   onSave: (data: any) => void
-  onUploadFile?: (file: File, notes?: string) => Promise<void>
+  onUploadFile?: (file: File, notes?: string, tags?: string[], collectionIds?: string[]) => Promise<void>
   saving: boolean
   resurface: ResurfaceItem[]
   onRefresh: () => void
@@ -46,6 +46,7 @@ interface MainPanelProps {
   activeTag?: string | null
   activeTopic?: string | null
   onClearFilter?: (key: 'tag' | 'topic' | 'type' | 'all') => void
+  onCreateCollection?: (name: string, emoji: string) => Promise<Collection>
 }
 
 export function MainPanel({
@@ -72,6 +73,7 @@ export function MainPanel({
   activeTag,
   activeTopic,
   onClearFilter,
+  onCreateCollection,
 }: MainPanelProps) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -232,7 +234,7 @@ export function MainPanel({
       )}
 
       {/* Capture zone */}
-      <CaptureZone onSave={onSave} onUploadFile={onUploadFile} saving={saving} captureRef={captureRef} />
+      <CaptureZone onSave={onSave} onUploadFile={onUploadFile} saving={saving} captureRef={captureRef} collections={collections} onCreateCollection={onCreateCollection} />
 
       {/* Scrollable content */}
       <div className="content-scroll">

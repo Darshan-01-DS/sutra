@@ -21,7 +21,7 @@ export default auth((req: any) => {
   }
   
   if (isLoggedIn && isAuthRoute) {
-    return NextResponse.redirect(new URL('/', req.url))
+    return NextResponse.redirect(new URL('/dashboard', req.url))
   }
 })
 

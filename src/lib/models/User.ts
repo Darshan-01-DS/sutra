@@ -18,6 +18,7 @@ export interface IUser extends Document {
   lastActiveAt?: Date
   loginAttempts: number
   lockUntil?: Date
+  hasSeenOnboarding: boolean
   createdAt: Date
   updatedAt: Date
 }
@@ -49,6 +50,9 @@ const UserSchema = new Schema<IUser>(
     // Security
     loginAttempts:   { type: Number, default: 0 },
     lockUntil:       { type: Date },
+
+    // Onboarding
+    hasSeenOnboarding: { type: Boolean, default: false },
   },
   { timestamps: true }
 )
