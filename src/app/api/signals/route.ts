@@ -181,6 +181,22 @@ export async function POST(req: NextRequest) {
 
     const signal = await SignalModel.create(signalData)
 
+    // Global RAG Indexing: Insert note into DocumentChunkModel if embedding exists
+    if (signalData.embedding?.length) {
+      const { DocumentChunkModel } = await import('@/lib/models/DocumentChunk')
+      await DocumentChunkModel.create({
+        userId: signal.userId,
+        signalId: String(signal._id),
+        documentName: signal.title ?? 'Saved Note',
+        chunkIndex: 0,
+        text: textForAI,
+        embedding: signalData.embedding,
+        metadata: {
+          fileName: 'note',
+          uploadDate: new Date(),
+        }
+      }).catch(err => console.warn('Global RAG index failed:', err.message))
+    }
     // Update collection signal lists if collectionIds were provided
     if (Array.isArray(userCollectionIds) && userCollectionIds.length > 0) {
       const { CollectionModel } = await import('@/lib/models/Collection')

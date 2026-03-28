@@ -1,12 +1,9 @@
-// src/app/api/documents/process/route.ts
-// Extracts text from a PDF signal, chunks it, embeds each chunk, stores in MongoDB
-// Called automatically after PDF upload OR manually by the user
-
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { connectDB } from '@/lib/mongodb'
 import { DocumentChunkModel } from '@/lib/models/DocumentChunk'
 import SignalModel from '@/lib/models/Signal'
+import { checkDailyLimit, incrementUsage } from '@/lib/usage'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120  // PDF processing can be slow
@@ -25,7 +22,7 @@ function chunkText(text: string, chunkSize = 800, overlap = 150): string[] {
   return chunks
 }
 
-// ── OpenAI embedding ─────────────────────────────────────────────────────────
+// ── Embedding logic ──────────────────────────────────────────────────────────
 
 async function embedText(text: string, apiKey: string, provider: string): Promise<number[]> {
   if (provider === 'gemini') {
@@ -71,7 +68,20 @@ export async function POST(req: NextRequest) {
 
     const { signalId, apiKey, provider } = await req.json()
     if (!signalId) return NextResponse.json({ error: 'signalId required' }, { status: 400 })
-    if (!apiKey)   return NextResponse.json({ error: 'API key required'  }, { status: 400 })
+
+    const targetApiKey = apiKey || process.env.OPENROUTER_API_KEY
+    const targetProvider = apiKey ? (provider || 'openai') : 'openrouter'
+
+    if (!targetApiKey) {
+      return NextResponse.json({ error: 'Server AI Key is not configured.' }, { status: 500 })
+    }
+
+    if (!apiKey) {
+      const usage = await checkDailyLimit(session.user.id, 'process', 30)
+      if (!usage.ok) {
+        return NextResponse.json({ error: 'Daily knowledge processing limit reached (Free Plan). Upgrade or plug in your own API key in Settings.' }, { status: 429 })
+      }
+    }
 
     await connectDB()
 
@@ -108,12 +118,17 @@ export async function POST(req: NextRequest) {
     const chunks = chunkText(rawText, 800, 150)
     if (chunks.length === 0) return NextResponse.json({ error: 'No text chunks generated' }, { status: 422 })
 
+    // Rate-limit increment (we delay it until we know it actually requires processing to be fair)
+    if (!apiKey) {
+      await incrementUsage(session.user.id, 'process')
+    }
+
     // 6. Embed and store each chunk (batch in groups of 5 to avoid rate limits)
     const BATCH = 5
     const docs = []
     for (let i = 0; i < chunks.length; i += BATCH) {
       const batch = chunks.slice(i, i + BATCH)
-      const embeddings = await Promise.all(batch.map(c => embedText(c, apiKey, provider)))
+      const embeddings = await Promise.all(batch.map(c => embedText(c, targetApiKey, targetProvider)))
       for (let j = 0; j < batch.length; j++) {
         docs.push({
           userId:       session.user.id,

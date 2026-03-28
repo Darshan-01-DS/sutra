@@ -61,6 +61,8 @@ function cosineSim(a: number[], b: number[]): number {
 
 // ── POST /api/documents/query ─────────────────────────────────────────────────
 
+import { checkDailyLimit, incrementUsage } from '@/lib/usage'
+
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
@@ -68,12 +70,30 @@ export async function POST(req: NextRequest) {
 
     const { question, signalIds, apiKey, baseUrl, modelName, provider } = await req.json()
     if (!question?.trim()) return NextResponse.json({ error: 'question required' }, { status: 400 })
-    if (!apiKey)            return NextResponse.json({ error: 'API key required' }, { status: 400 })
+
+    const targetApiKey = apiKey || process.env.OPENROUTER_API_KEY
+    const targetProvider = apiKey ? (provider || 'openai') : 'openrouter'
+
+    if (!targetApiKey) {
+      return NextResponse.json({ error: 'Server AI Key is not configured.' }, { status: 500 })
+    }
+
+    if (!apiKey) {
+      const usage = await checkDailyLimit(session.user.id, 'query', 30)
+      if (!usage.ok) {
+        return NextResponse.json({ error: 'Daily query limit reached (Free Plan). Upgrade or plug in your own API key in Settings.' }, { status: 429 })
+      }
+    }
 
     await connectDB()
 
+    // Rate-limit increment (delay until execution starts)
+    if (!apiKey) {
+      await incrementUsage(session.user.id, 'query')
+    }
+
     // 1. Embed the question
-    const queryEmbedding = await embedQuery(question, apiKey, provider)
+    const queryEmbedding = await embedQuery(question, targetApiKey, targetProvider)
 
     // 2. Retrieve relevant chunks
     let topChunks: { text: string; documentName: string; signalId: string; score: number }[] = []
@@ -137,29 +157,31 @@ export async function POST(req: NextRequest) {
 
     if (topChunks.length === 0 || debugInfo.allChunksCount === 0) {
       return NextResponse.json({
-        answer: `I couldn't find relevant content in the uploaded documents. Make sure the PDF has been processed first. (Debug info: ${JSON.stringify(debugInfo)})`,
+        answer: "I couldn't find relevant content in your knowledge base. Please make sure your documents or notes are saved and processed.",
         sources: [],
-        debug: debugInfo
       })
     }
 
     // 3. Build context
     const context = topChunks
-      .map((c, i) => `[${c.documentName} — chunk ${i + 1}]\n${c.text}`)
+      .map((c, i) => `[Source: ${c.documentName}]\n${c.text}`)
       .join('\n\n---\n\n')
 
-    const systemPrompt = `You are a helpful assistant. Answer the user's question using ONLY the document context provided below. If the answer is not in the context, say so clearly. Be concise and accurate.
+    const systemPrompt = `You are an elite AI assistant powering a premium knowledge base. 
+Answer the user's question using ONLY the provided document context below. 
+
+CRITICAL RULE: If the exact answer or highly relevant information is NOT found in the context below, you MUST literally reply with: "I couldn't find the answer in the provided context." Do not guess or hallucinate generic external knowledge.
 
 DOCUMENT CONTEXT:
 ${context}`
 
     // 4. Call the LLM
-    const llmBaseUrl = baseUrl || 'https://api.openai.com/v1'
-    const llmModel = modelName || 'gpt-4o-mini'
+    const llmBaseUrl = apiKey ? (baseUrl || 'https://api.openai.com/v1') : 'https://openrouter.ai/api/v1'
+    const llmModel = apiKey ? (modelName || 'gpt-4o-mini') : 'openai/gpt-4o-mini'
 
     const llmRes = await fetch(`${llmBaseUrl}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${targetApiKey}` },
       body: JSON.stringify({
         model: llmModel,
         messages: [
@@ -177,7 +199,12 @@ ${context}`
     }
 
     const llmData = await llmRes.json()
-    const answer = llmData.choices?.[0]?.message?.content ?? 'No answer generated.'
+    let answer = llmData.choices?.[0]?.message?.content ?? 'No answer generated.'
+    
+    // Strict hallucination block interceptor
+    if (answer.includes("I couldn't find the answer in the provided context")) {
+      answer = "I couldn't find the answer in the uploaded context. Please ensure the relevant document or note is saved properly."
+    }
 
     const uniqueSourcesMap = new Map<string, any>()
     for (const c of topChunks) {

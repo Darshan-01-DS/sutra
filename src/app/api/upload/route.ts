@@ -157,6 +157,22 @@ export async function POST(req: NextRequest) {
 
     const signal = await SignalModel.create(signalData)
 
+    if (signalData.embedding?.length) {
+      const { DocumentChunkModel } = await import('@/lib/models/DocumentChunk')
+      await DocumentChunkModel.create({
+        userId: signal.userId,
+        signalId: String(signal._id),
+        documentName: signal.title ?? 'Uploaded File',
+        chunkIndex: 0,
+        text: textForAI,
+        embedding: signalData.embedding,
+        metadata: {
+          fileName: file.name,
+          uploadDate: new Date(),
+        }
+      }).catch(err => console.warn('Global RAG index failed:', err.message))
+    }
+
     // Log activity
     await ActivityModel.create({
       type: 'saved',

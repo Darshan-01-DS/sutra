@@ -98,16 +98,21 @@ export interface AIConfig {
 }
 
 export async function autoTag(title: string, content?: string, ai?: AIConfig): Promise<{ tags: string[]; topics: string[] }> {
-  const key = ai?.key ?? process.env.OPENAI_API_KEY
+  const isSystemFallback = !ai?.key
+  const key = ai?.key ?? process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY
+  
   if (!key) {
     return { tags: [], topics: [] }
   }
+
+  const baseUrl = isSystemFallback ? 'https://openrouter.ai/api/v1' : (ai?.baseUrl || undefined)
+  const model = isSystemFallback ? 'openai/gpt-4o-mini' : (ai?.model || 'gpt-4o-mini')
 
   try {
     const { default: OpenAI } = await import('openai')
     const openai = new OpenAI({ 
       apiKey: key,
-      baseURL: ai?.baseUrl || undefined,
+      baseURL: baseUrl,
     })
 
     const prompt = `You are an expert knowledge curator. Analyze this saved content and categorize it precisely.
@@ -127,7 +132,7 @@ ${content ? `Content: ${content.slice(0, 600)}` : ''}
 JSON only:`
 
     const res = await openai.chat.completions.create({
-      model: ai?.model || 'gpt-4o-mini',
+      model: model,
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 200,
       temperature: 0.15,
@@ -136,7 +141,8 @@ JSON only:`
     const text = res.choices[0].message.content ?? '{}'
     const clean = text.replace(/```json|```/g, '').trim()
     return JSON.parse(clean)
-  } catch {
+  } catch (e: any) {
+    console.warn('Scraper autoTag error:', e.message)
     return { tags: [], topics: [] }
   }
 }
@@ -148,11 +154,14 @@ export async function getEmbedding(text: string): Promise<number[]> {
 }
 
 export async function getEmbeddingWithKey(text: string, ai?: AIConfig): Promise<number[]> {
-  const key = ai?.key ?? process.env.OPENAI_API_KEY
+  const isSystemFallback = !ai?.key
+  const key = ai?.key ?? process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY
+  const provider = isSystemFallback ? 'openrouter' : (ai?.provider ?? 'openai')
+
   if (!key) return []
 
   try {
-    if (ai?.provider === 'gemini') {
+    if (provider === 'gemini') {
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${key}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -164,7 +173,7 @@ export async function getEmbeddingWithKey(text: string, ai?: AIConfig): Promise<
       if (!res.ok) throw new Error(`Gemini Embedding error: ${res.statusText}`)
       const data = await res.json()
       return data.embedding.values
-    } else if (ai?.provider === 'openrouter') {
+    } else if (provider === 'openrouter') {
       const res = await fetch('https://openrouter.ai/api/v1/embeddings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },

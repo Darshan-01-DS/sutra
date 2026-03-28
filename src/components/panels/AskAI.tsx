@@ -82,7 +82,6 @@ export function AskAI({ onOpenDrawer, apiKey }: AskAIProps) {
     const provider = typeof window !== 'undefined' ? localStorage.getItem('sutra_ai_provider') ?? 'openai' : 'openai'
     const baseUrl  = typeof window !== 'undefined' ? localStorage.getItem('sutra_ai_base_url') ?? '' : ''
     
-    if (!key) { setError('Add an API key first'); return }
     setProcessing(signalId)
     setError('')
     try {
@@ -192,12 +191,6 @@ export function AskAI({ onOpenDrawer, apiKey }: AskAIProps) {
           </button>
         ))}
       </div>
-
-      {!hasKey && (
-        <div style={{ padding: '10px 14px', background: 'var(--bg3)', color: 'var(--coral)', borderRadius: 'var(--r)', fontSize: 12, border: '1px solid var(--coral-border, rgba(232,112,90,0.25))', marginBottom: 12 }}>
-          ⚠ Add an API key in <strong>Account → AI &amp; Keys</strong> to enable AI.
-        </div>
-      )}
 
       {/* PDF Documents mode */}
       {mode === 'docs' && (
