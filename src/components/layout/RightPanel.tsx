@@ -7,6 +7,7 @@ import { KnowledgeGraph } from '@/components/panels/KnowledgeGraph'
 import { TopicClusters } from '@/components/panels/TopicClusters'
 import { ActivityFeed } from '@/components/panels/ActivityFeed'
 import { AskAI } from '@/components/panels/AskAI'
+import { GraphErrorBoundary } from '@/components/panels/GraphErrorBoundary'
 
 interface RightPanelProps {
   tab: 'graph' | 'topics' | 'activity' | 'ask'
@@ -90,7 +91,7 @@ export function RightPanel({
       </div>
 
       <div className="rp-body">
-        {tab === 'graph'    && <KnowledgeGraph stats={stats} loading={statsLoading} onOpenFullscreen={onOpenGraphFullscreen} />}
+        {tab === 'graph'    && <GraphErrorBoundary><KnowledgeGraph stats={stats} loading={statsLoading} onOpenFullscreen={onOpenGraphFullscreen} /></GraphErrorBoundary>}
         {tab === 'topics'   && <TopicClusters stats={stats} loading={statsLoading} onTopicClick={onTopicClick} />}
         {tab === 'activity' && <ActivityFeed stats={stats} loading={statsLoading} />}
         {tab === 'ask'      && <AskAI onOpenDrawer={onOpenDrawer} apiKey={apiKey} />}

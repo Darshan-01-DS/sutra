@@ -44,9 +44,8 @@ export default function TagsInput({ tags, onChange, placeholder = 'Add tag...' }
   const addTag = useCallback((raw: string) => {
     const t = normalizeTag(raw)
     if (!t) return
-    const withHash = '#' + t
-    if (tags.includes(withHash)) { setInput(''); setOpen(false); setHiIdx(-1); return }
-    onChange([...tags, withHash])
+    if (tags.includes(t)) { setInput(''); setOpen(false); setHiIdx(-1); return }
+    onChange([...tags, t])
     setInput('')
     setOpen(false)
     setHiIdx(-1)
@@ -58,9 +57,9 @@ export default function TagsInput({ tags, onChange, placeholder = 'Add tag...' }
   }, [tags, onChange])
 
   const handleKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    const filtered = suggestions.filter(s => !tags.includes('#' + s.tag))
-    const allOptions = filtered.length > 0 || (input && !tags.includes('#' + normalizeTag(input)))
-    const maxIdx = filtered.length + (input && !tags.includes('#' + normalizeTag(input)) ? 1 : 0) - 1
+    const filtered = suggestions.filter(s => !tags.includes(s.tag))
+    const allOptions = filtered.length > 0 || (input && !tags.includes(normalizeTag(input)))
+    const maxIdx = filtered.length + (input && !tags.includes(normalizeTag(input)) ? 1 : 0) - 1
 
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -91,9 +90,10 @@ export default function TagsInput({ tags, onChange, placeholder = 'Add tag...' }
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const filtered = suggestions.filter(s => !tags.includes('#' + s.tag)).slice(0, 6)
-  const createLabel = input ? '#' + normalizeTag(input) : ''
-  const showCreate = createLabel && createLabel !== '#' && !tags.includes(createLabel)
+  const filtered = suggestions.filter(s => !tags.includes(s.tag)).slice(0, 6)
+  const normalizedInput = input ? normalizeTag(input) : ''
+  const createLabel = normalizedInput ? '#' + normalizedInput : ''
+  const showCreate = createLabel && createLabel !== '#' && !tags.includes(normalizedInput)
   const showDrop = open && (filtered.length > 0 || showCreate)
 
   return (

@@ -348,14 +348,14 @@ html, body {
   border: none;
   padding: 14px 16px 10px;
   color: var(--text);
-  font-family: var(--font-serif);
+  font-family: var(--font-body); /* intentionally body font — serif felt mismatched */
   font-size: 15px;
   resize: none;
   outline: none;
   line-height: 1.6;
   display: block;
 }
-.capture-textarea::placeholder { color: var(--text3); font-style: italic; }
+.capture-textarea::placeholder { color: var(--text3); }
 
 .url-inline-row {
   display: flex;
@@ -554,12 +554,13 @@ html, body {
   background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  overflow: hidden;
+  /* NOTE: no overflow:hidden here — popovers are positioned above the card */
   cursor: pointer;
   transition: border-color 0.18s, transform 0.18s;
   display: flex;
   flex-direction: column;
   animation: fadeSlideIn 0.3s ease both;
+  position: relative;
 }
 .signal-card:hover { border-color: var(--border3); transform: translateY(-2px); }
 .signal-card.highlight { border-color: var(--accent-border); }
@@ -573,15 +574,18 @@ html, body {
   justify-content: center;
   overflow: hidden;
   flex-shrink: 0;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
 }
 .thumb-icon { font-size: 28px; opacity: 0.25; }
 .card-thumb img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
 
 .thumb-art-a { background: linear-gradient(135deg, #13131A 0%, #1C1A2E 100%); }
 .thumb-art-t { background: linear-gradient(135deg, #0C1520 0%, #0F2030 100%); }
-.thumb-art-v { background: linear-gradient(135deg, #1A0E0C 0%, #2D1510 100%); }
+.thumb-art-v { background: linear-gradient(135deg, #200B0B 0%, #3D1A18 100%); }
 .thumb-art-p { background: linear-gradient(135deg, #161610 0%, #252510 100%); }
 .thumb-art-i { background: linear-gradient(135deg, #0C1A16 0%, #102B22 100%); }
+.thumb-art-n { background: linear-gradient(135deg, #0A1A18 0%, #0E2825 100%); }
+.thumb-art-v .thumb-icon { opacity: 0.4; color: var(--coral); }
 
 .type-badge {
   position: absolute;
@@ -601,7 +605,7 @@ html, body {
 .tb-v { background: var(--coral-bg);  border-color: var(--coral-border);  color: var(--coral); }
 .tb-p { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); }
 .tb-i { background: var(--green-bg);  border-color: var(--green-border);  color: var(--green); }
-.tb-n { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); }
+.tb-n { background: var(--teal-bg);   border-color: var(--teal-border);   color: var(--teal); }
 .tb-l { background: var(--teal-bg);   border-color: var(--teal-border);   color: var(--teal); }
 
 .card-body { padding: 11px 12px 8px; flex: 1; }

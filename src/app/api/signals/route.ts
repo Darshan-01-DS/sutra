@@ -33,9 +33,10 @@ export async function GET(req: NextRequest) {
   if (userId) filter.userId = userId
   if (type)  filter.type = type
   if (tag) {
+    const cleanTag = tag.replace(/^#+/, '').toLowerCase().trim()
     filter.$or = [
-      { tags: tag },
-      { topics: tag }
+      { tags: cleanTag },
+      { topics: cleanTag }
     ]
   }
   if (topic) filter.topics = { $in: [topic] }
@@ -134,7 +135,7 @@ export async function POST(req: NextRequest) {
 
     // Merge user-provided tags with AI-generated tags (user tags take priority)
     const mergedTags = Array.from(new Set([
-      ...(Array.isArray(userTags) ? userTags.map((t: string) => t.trim().toLowerCase()).filter(Boolean) : []),
+      ...(Array.isArray(userTags) ? userTags.map((t: string) => t.replace(/^#+/, '').trim().toLowerCase()).filter(Boolean) : []),
       ...tags,
     ]))
     signalData.tags = mergedTags

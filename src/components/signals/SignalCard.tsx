@@ -2,6 +2,7 @@
 // src/components/signals/SignalCard.tsx
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Signal } from '@/types'
 import { TYPE_CONFIG, timeAgo } from '@/lib/utils'
 
@@ -41,10 +42,23 @@ export function SignalCard({
     && signal.type !== 'image'
 
   const cardRef = useRef<HTMLDivElement>(null)
+  const [popoverRect, setPopoverRect] = useState<DOMRect | null>(null)
+
+  // Compute card rect when showing a popover (for portal positioning)
+  const openPopover = (which: 'resurface' | 'collect') => {
+    const rect = cardRef.current?.getBoundingClientRect() ?? null
+    setPopoverRect(rect)
+    if (which === 'resurface') { setShowResurface(true); setShowCollect(false) }
+    else { setShowCollect(true); setShowResurface(false) }
+  }
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
+      // Close if click is not inside any popover or the card
+      const target = e.target as Node
+      const card = cardRef.current
+      const portal = document.getElementById('signal-popover-portal')
+      if (!card?.contains(target) && !portal?.contains(target)) {
         setShowResurface(false)
         setShowCollect(false)
         setIsCreatingCol(false)
@@ -68,11 +82,14 @@ export function SignalCard({
   }
 
   const openCollect = async () => {
+    const rect = cardRef.current?.getBoundingClientRect() ?? null
+    setPopoverRect(rect)
     setShowCollect(true)
+    setShowResurface(false)
     try {
       const res = await fetch('/api/collections')
       const data = await res.json()
-      setCollections(data.collections || [])
+      setCollections(Array.isArray(data) ? data : (data.collections || []))
     } catch {
       setCollections([])
     }
@@ -199,7 +216,7 @@ export function SignalCard({
         {signal.tags.length > 0 && (
           <div className="card-tags-row">
             {signal.tags.slice(0, 3).map(tag => (
-              <span key={tag} className="ctag">{tag}</span>
+              <span key={tag} className="ctag">#{tag}</span>
             ))}
           </div>
         )}
@@ -217,7 +234,7 @@ export function SignalCard({
           <div style={{ position: 'relative', display: 'inline-block' }}>
             <button
               className="ib"
-              onClick={e => { e.stopPropagation(); setShowResurface(!showResurface); setShowCollect(false) }}
+              onClick={e => { e.stopPropagation(); openPopover('resurface') }}
               title="Add to Resurface"
             >
               ↺
@@ -228,7 +245,7 @@ export function SignalCard({
           <div style={{ position: 'relative', display: 'inline-block' }}>
             <button
               className="ib"
-              onClick={e => { e.stopPropagation(); openCollect(); setShowResurface(false) }}
+              onClick={e => { e.stopPropagation(); openCollect() }}
               title="Add to collection"
             >
               ⊞
@@ -249,73 +266,86 @@ export function SignalCard({
       </div>
 
       {/* Popovers - moved to root for absolute sizing */}
-      {showResurface && (
+      {/* Portaled popovers — rendered outside scroll container to avoid clipping */}
+      {(showResurface || showCollect) && popoverRect && typeof document !== 'undefined' && createPortal(
         <div
-          className="popover"
-          style={{ position: 'absolute', inset: 0, padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'rgba(10,10,12,0.92)', backdropFilter: 'blur(10px)', zIndex: 100, borderRadius: 'var(--r-xl)' }}
-          onClick={e => e.stopPropagation()}
+          id="signal-popover-portal"
+          style={{
+            position: 'fixed',
+            left: popoverRect.left,
+            top: Math.max(8, popoverRect.top - (showResurface ? 230 : Math.min(350, 60 + collections.length * 48))),
+            width: popoverRect.width,
+            zIndex: 9000,
+          }}
         >
-          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, textAlign: 'center', fontFamily: 'var(--font-serif)' }}>Add to Resurface</div>
-          <textarea
-            className="search-input"
-            style={{ width: '100%', padding: '12px', fontSize: 13, marginBottom: 16, background: 'var(--bg5)', border: '1px solid var(--border2)', borderRadius: 'var(--r)', minHeight: 80, resize: 'none', color: 'var(--text)' }}
-            placeholder="What should remind you about this?"
-            value={resurfaceNote}
-            onChange={e => setResurfaceNote(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddResurface(e as any) } }}
-            autoFocus
-          />
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-            <button className="btn-ghost" style={{ padding: '8px 20px', fontSize: 13, border: '1px solid var(--border)' }} onClick={(e) => { e.stopPropagation(); setShowResurface(false) }}>Cancel</button>
-            <button className="btn-primary" style={{ padding: '8px 20px', fontSize: 13 }} onClick={handleAddResurface}>Add to Queue</button>
-          </div>
-        </div>
-      )}
-
-      {showCollect && (
-        <div
-          className="popover"
-          style={{ position: 'absolute', inset: 0, padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'rgba(10,10,12,0.92)', backdropFilter: 'blur(10px)', zIndex: 100, borderRadius: 'var(--r-xl)' }}
-          onClick={e => e.stopPropagation()}
-        >
-          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, textAlign: 'center', fontFamily: 'var(--font-serif)' }}>Add to Collection</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '60%', overflowY: 'auto', marginBottom: 12, paddingRight: 4 }}>
-            {collections.map(c => (
-              <button
-                key={c._id}
-                className="btn-ghost"
-                style={{ textAlign: 'left', justifyContent: 'flex-start', padding: '10px 14px', fontSize: 13, background: 'var(--bg4)', border: '1px solid var(--border)', borderRadius: 'var(--r)' }}
-                onClick={() => handleCollect(c._id)}
-              >
-                <span style={{ opacity: 0.6, marginRight: 8 }}>○</span> {c.name}
-              </button>
-            ))}
-            {collections.length === 0 && !isCreatingCol && <div style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center', padding: '20px 0' }}>No collections found.</div>}
-          </div>
-          
-          {!isCreatingCol ? (
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-              <button className="btn-ghost" style={{ padding: '8px 20px', fontSize: 13, border: '1px solid var(--border)' }} onClick={(e) => { e.stopPropagation(); setShowCollect(false) }}>Cancel</button>
-              <button className="btn-ghost" style={{ padding: '8px 20px', fontSize: 13, color: 'var(--accent)', border: '1px solid var(--accent-border)' }} onClick={e => { e.stopPropagation(); setIsCreatingCol(true) }}>+ New</button>
-            </div>
-          ) : (
-            <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
-              <input
+          {showResurface && (
+            <div
+              style={{ padding: 16, display: 'flex', flexDirection: 'column', background: 'var(--bg2)', border: '1px solid var(--border2)', backdropFilter: 'blur(12px)', borderRadius: 'var(--r-lg)', boxShadow: '0 12px 40px rgba(0,0,0,0.5)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>Add to Resurface</div>
+              <textarea
+                style={{ width: '100%', padding: '10px 12px', fontSize: 12, marginBottom: 12, background: 'var(--bg4)', border: '1px solid var(--border2)', borderRadius: 'var(--r)', minHeight: 70, resize: 'none', color: 'var(--text)', outline: 'none', fontFamily: 'var(--font-body)' }}
+                placeholder="What should remind you about this?"
+                value={resurfaceNote}
+                onChange={e => setResurfaceNote(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddResurface(e as any) } }}
                 autoFocus
-                className="search-input"
-                style={{ width: '100%', fontSize: 13, padding: '12px', marginBottom: 16, background: 'var(--bg5)', border: '1px solid var(--border2)', borderRadius: 'var(--r)', color: 'var(--text)' }}
-                placeholder="Collection name…"
-                value={newColName}
-                onChange={e => setNewColName(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleCreateCol() }}
               />
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                <button className="btn-ghost" style={{ fontSize: 13, padding: '8px 20px', border: '1px solid var(--border)' }} onClick={() => setIsCreatingCol(false)}>Cancel</button>
-                <button className="btn-primary" style={{ fontSize: 13, padding: '8px 20px' }} onClick={handleCreateCol}>Create</button>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button className="btn-ghost" style={{ height: 32, padding: '0 14px', fontSize: 12 }} onClick={e => { e.stopPropagation(); setShowResurface(false) }}>Cancel</button>
+                <button className="btn-primary" style={{ height: 32, padding: '0 14px', fontSize: 12 }} onClick={handleAddResurface}>Add to Queue</button>
               </div>
             </div>
           )}
-        </div>
+
+          {showCollect && (
+            <div
+              style={{ padding: 16, display: 'flex', flexDirection: 'column', background: 'var(--bg2)', border: '1px solid var(--border2)', backdropFilter: 'blur(12px)', borderRadius: 'var(--r-lg)', boxShadow: '0 12px 40px rgba(0,0,0,0.5)', maxHeight: 320, overflowY: 'auto' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>Add to Collection</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                {collections.map(c => (
+                  <button
+                    key={c._id}
+                    className="btn-ghost"
+                    style={{ textAlign: 'left', justifyContent: 'flex-start', padding: '9px 12px', fontSize: 12, background: 'var(--bg4)', border: '1px solid var(--border)', borderRadius: 'var(--r)' }}
+                    onClick={() => handleCollect(c._id)}
+                  >
+                    <span style={{ opacity: 0.6, marginRight: 8 }}>{c.icon ?? '◈'}</span> {c.name}
+                  </button>
+                ))}
+                {collections.length === 0 && !isCreatingCol && (
+                  <div style={{ fontSize: 12, color: 'var(--text3)', textAlign: 'center', padding: '12px 0' }}>No collections yet.</div>
+                )}
+              </div>
+
+              {!isCreatingCol ? (
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="btn-ghost" style={{ height: 30, padding: '0 12px', fontSize: 12 }} onClick={e => { e.stopPropagation(); setShowCollect(false) }}>Cancel</button>
+                  <button className="btn-ghost" style={{ height: 30, padding: '0 12px', fontSize: 12, color: 'var(--accent)', border: '1px solid var(--accent-border)' }} onClick={e => { e.stopPropagation(); setIsCreatingCol(true) }}>+ New</button>
+                </div>
+              ) : (
+                <div onClick={e => e.stopPropagation()}>
+                  <input
+                    autoFocus
+                    style={{ width: '100%', fontSize: 12, padding: '9px 12px', marginBottom: 10, background: 'var(--bg4)', border: '1px solid var(--border2)', borderRadius: 'var(--r)', color: 'var(--text)', outline: 'none' }}
+                    placeholder="Collection name…"
+                    value={newColName}
+                    onChange={e => setNewColName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleCreateCol() }}
+                  />
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button className="btn-ghost" style={{ height: 30, padding: '0 12px', fontSize: 12 }} onClick={() => setIsCreatingCol(false)}>Cancel</button>
+                    <button className="btn-primary" style={{ height: 30, padding: '0 12px', fontSize: 12 }} onClick={handleCreateCol}>Create</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -36,7 +36,11 @@ const TYPE_NAVS: { type: SignalType; label: string; icon: string; color: string 
   { type: 'note',    label: 'Notes',    icon: '✎', color: 'var(--accent)' },
 ]
 
-const TAG_COLORS = ['tp-vio', 'tp-teal', 'tp-coral', 'tp-gold', 'tp-grn']
+function getTagColorClass(tag: string): string {
+  const colors = ['tp-vio', 'tp-teal', 'tp-coral', 'tp-gold', 'tp-grn']
+  const hash = tag.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
+  return colors[hash % colors.length]
+}
 
 export function Sidebar({
   activeType, activeTag, activeView, stats,
@@ -229,7 +233,7 @@ export function Sidebar({
         {filteredTopics.slice(0, 20).map((topic, i) => (
           <span
             key={topic.name}
-            className={`tag-pill ${TAG_COLORS[i % TAG_COLORS.length]} ${activeTag === topic.name ? 'active' : ''}`}
+            className={`tag-pill ${getTagColorClass(topic.name)} ${activeTag === topic.name ? 'active' : ''}`}
             onClick={() => onNavTag(topic.name)}
             style={{ opacity: activeTag && activeTag !== topic.name ? 0.5 : 1 }}
           >

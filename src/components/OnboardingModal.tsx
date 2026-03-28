@@ -20,7 +20,7 @@ const STEPS = [
     label: 'Feature 01 — Capture',
     title: <>Write without <em>friction</em></>,
     desc: 'A distraction-free canvas that gets out of your way and lets your thinking flow.',
-    layout: 'cols-3' as const,
+    layout: 'cols-2' as const,
     cards: [
       {
         icon: <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>,
@@ -33,11 +33,6 @@ const STEPS = [
         what: 'Templates', name: 'Quick Capture',
         body: 'Start from pre-built templates for meeting notes, research briefs, daily logs, and more. Never stare at a blank page again.',
         tag: 'Smart',
-      },
-      {
-        icon: <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>,
-        what: 'Collaboration', name: 'Shared Docs',
-        body: 'Invite teammates to view and co-create documents. Sutra tracks who contributed what and when.',
       },
     ],
   },
@@ -94,9 +89,10 @@ const STEPS = [
         tag: 'Auto-linked',
       },
       {
-        icon: <><path d="M14.5 10c-.83 0-1.5-.67-1.5-1.5v-5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5z"/><path d="M20.5 10H19V8.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/><path d="M9.5 14c.83 0 1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5S8 21.33 8 20.5v-5c0-.83.67-1.5 1.5-1.5z"/><path d="M3.5 14H5v1.5c0 .83-.67 1.5-1.5 1.5S2 16.33 2 15.5 2.67 14 3.5 14z"/><path d="M14 14.5c0-.83.67-1.5 1.5-1.5h5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-5c-.83 0-1.5-.67-1.5-1.5z"/></>,
-        what: 'Canvas', name: 'Infinite Whiteboard',
-        body: 'A freeform canvas for diagrams, flowcharts, and rough thinking. Embed notes, images, and connections anywhere you want.',
+        icon: <><circle cx="12" cy="12" r="3"/><circle cx="4" cy="6" r="2"/><circle cx="20" cy="6" r="2"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="18" r="2"/><line x1="6" y1="6" x2="10" y2="10"/><line x1="14" y1="10" x2="18" y2="6"/><line x1="6" y1="18" x2="10" y2="14"/><line x1="14" y1="14" x2="18" y2="18"/></>,
+        what: 'Knowledge Graph', name: 'AI Knowledge Graph',
+        body: 'Sutra builds a live graph of your signals — finding hidden connections between your saved content using semantic similarity.',
+        tag: 'Powered by embeddings',
       },
     ],
   },
@@ -358,6 +354,11 @@ export function OnboardingModal({ onDone }: OnboardingModalProps) {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Step counter */}
+        <div style={{ position: 'fixed', bottom: 74, left: '50%', transform: 'translateX(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.2em', zIndex: 100 }}>
+          {current + 1} of {TOTAL}
         </div>
 
         {/* Step dots */}

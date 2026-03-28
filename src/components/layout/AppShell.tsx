@@ -344,9 +344,13 @@ export function AppShell() {
   }
 
   const subtitleMap = () => {
-    if (activeTag)   return `tag: ${activeTag}`
-    if (activeTopic) return `topic: ${activeTopic}`
-    if (activeType !== 'all') return `${activeType}s only`
+    if (activeTag)   return `${total} results for #${activeTag}`
+    if (activeTopic) return `${total} results in ${activeTopic}`
+    if (activeType !== 'all') return `${total} ${activeType}s`
+    if (activeCollectionId) {
+      const col = collections.find(c => c._id === activeCollectionId)
+      return `${total} signals in ${col?.name ?? 'collection'}`
+    }
     return `${total} saved · ${stats?.thisWeek ?? 0} new this week`
   }
 

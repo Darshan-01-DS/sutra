@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
   if (userId) pipeline.push({ $match: { userId } })
   pipeline.push(
     { $unwind: '$tags' },
+    // Normalize: strip leading '#' from any legacy stored tags
+    { $addFields: { tags: { $ltrim: { input: '$tags', chars: '#' } } } },
     ...(q ? [{ $match: { tags: { $regex: `^${q}`, $options: 'i' } } }] : []),
     { $group: { _id: '$tags', count: { $sum: 1 } } },
     { $sort: { count: -1 } },

@@ -84,10 +84,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token
     },
     async session({ session, token }) {
-      if (session.user) {
-        // Always attach MongoDB _id to session so all queries work
+      if (session.user && token.userId) {
         session.user.id = token.userId as string
         ;(session as any).hasSeenOnboarding = token.hasSeenOnboarding ?? false
+        // Always read fresh name/image from DB so profile changes are immediate
+        try {
+          await connectDB()
+          const dbUser = await UserModel.findById(token.userId).select('name image').lean() as any
+          if (dbUser) {
+            session.user.name  = dbUser.name  ?? session.user.name
+            session.user.image = dbUser.image ?? session.user.image
+          }
+        } catch {}
       }
       return session
     },

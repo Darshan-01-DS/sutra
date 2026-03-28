@@ -345,23 +345,35 @@ export default function AccountPage() {
                     const v = e.target.value; setProvider(v)
                     if (v === 'openai') { setBaseUrl(''); setModelName('gpt-4o-mini') }
                     else if (v === 'groq') { setBaseUrl('https://api.groq.com/openai/v1'); setModelName('llama3-8b-8192') }
-                    else if (v === 'openrouter') { setBaseUrl('https://openrouter.ai/api/v1'); setModelName('meta-llama/llama-3-8b-instruct:free') }
+                    else if (v === 'openrouter') { setBaseUrl('https://openrouter.ai/api/v1'); setModelName('') }
+                    else if (v === 'gemini') { setBaseUrl(''); setModelName('gemini-1.5-flash') }
+                    else { setBaseUrl(''); setModelName('') }
                   }}>
                     <option value="openai">OpenAI (Default)</option>
                     <option value="groq">Groq</option>
                     <option value="openrouter">OpenRouter</option>
+                    <option value="gemini">Google Gemini</option>
                     <option value="custom">Custom (Ollama / Local)</option>
                   </select>
                 </div>
-                {provider !== 'openai' && (
+                {(provider !== 'openai' && provider !== 'gemini') && (
                   <div className="form-row-2">
                     <div className="form-row"><div className="form-label">Base URL</div><input className="form-input" value={baseUrl} onChange={e => setBaseUrl(e.target.value)} /></div>
-                    <div className="form-row"><div className="form-label">Model Name</div><input className="form-input" value={modelName} onChange={e => setModelName(e.target.value)} /></div>
+                    <div className="form-row"><div className="form-label">Model Name</div><input className="form-input" value={modelName} onChange={e => setModelName(e.target.value)} placeholder={
+                      provider === 'openrouter' ? 'e.g. meta-llama/llama-3-8b-instruct:free' :
+                      provider === 'groq' ? 'e.g. llama3-8b-8192' :
+                      'e.g. llama3'
+                    } /></div>
                   </div>
                 )}
+                {provider === 'gemini' && (
+                  <div className="form-row"><div className="form-label">Gemini Model</div><input className="form-input" value={modelName} onChange={e => setModelName(e.target.value)} placeholder="gemini-1.5-flash" /></div>
+                )}
                 <div className="form-row">
-                  <div className="form-label">{provider === 'openai' ? 'OpenAI API Key' : 'Provider API Key'}</div>
-                  <input className="form-input form-input-mono" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-proj-..." />
+                  <div className="form-label">{provider === 'openai' ? 'OpenAI API Key' : provider === 'gemini' ? 'Google AI API Key' : 'Provider API Key'}</div>
+                  <input className="form-input form-input-mono" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder={
+                    provider === 'gemini' ? 'AIza...' : provider === 'openai' ? 'sk-proj-...' : 'API key...'
+                  } />
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 16, padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 'var(--r)' }}>
                   Your key is stored locally in your browser only.

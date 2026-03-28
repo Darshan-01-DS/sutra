@@ -35,7 +35,7 @@ export function Topbar({ onSearchOpen, saving, onOpenSettings, onOpenExtension, 
           onClick={onSearchOpen}
           onFocus={onSearchOpen}
         />
-        <span className="search-kbd">⌘K</span>
+        <span className="search-kbd">⌘K / Ctrl+K</span>
       </div>
 
       <div className="topbar-actions">

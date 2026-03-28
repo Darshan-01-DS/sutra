@@ -20,8 +20,10 @@ export function KnowledgeGraph({ stats, loading, onOpenFullscreen }: Props2) {
   const [nodes, setNodes]   = useState<KGNode[]>([])
   const [edges, setEdges]   = useState<KGEdge[]>([])
   const [focusId, setFocusId] = useState<string | null>(null)
+  const [graphLoading, setGraphLoading] = useState(false)
 
-  useEffect(() => {
+  const fetchGraph = () => {
+    setGraphLoading(true)
     fetch('/api/graph')
       .then(r => r.json())
       .then(data => {
@@ -70,7 +72,19 @@ export function KnowledgeGraph({ stats, loading, onOpenFullscreen }: Props2) {
         ])
         setFocusId('1')
       })
-  }, [])
+      .finally(() => setGraphLoading(false))
+  }
+
+  // Fetch on mount, then refetch whenever stats.total changes (after new signal saved)
+  const prevTotal = useRef<number | null>(null)
+  useEffect(() => {
+    const currentTotal = stats?.total ?? null
+    if (prevTotal.current === null || prevTotal.current !== currentTotal) {
+      prevTotal.current = currentTotal
+      fetchGraph()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stats?.total])
 
   const nodeMap = new Map(nodes.map(n => [n.id, n]))
 
@@ -80,6 +94,22 @@ export function KnowledgeGraph({ stats, loading, onOpenFullscreen }: Props2) {
         <div className="rp-section-label">Knowledge graph</div>
         <div className="graph-box" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ color: 'var(--text3)', fontSize: 12 }}>Building graph…</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!loading && nodes.length === 0) {
+    return (
+      <div>
+        <div className="rp-section-label">Knowledge graph</div>
+        <div className="graph-box" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 20 }}>
+          <div style={{ fontSize: 32, opacity: 0.15 }}>◎</div>
+          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text2)', textAlign: 'center' }}>Graph is empty</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.5, maxWidth: 200 }}>
+            Save signals and add an API key to enable semantic connections.
+          </div>
+          <a href="/account" style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}>Add API Key →</a>
         </div>
       </div>
     )

@@ -56,7 +56,7 @@ export function SignalListItem({
       <span className={`type-badge ${cfg.badgeClass}`} style={{ position: 'static', flexShrink: 0 }}>{cfg.label}</span>
       <div className="list-title">{signal.title}</div>
       {signal.tags.slice(0, 2).map(t => (
-        <span key={t} className="ctag" style={{ flexShrink: 0 }}>{t}</span>
+        <span key={t} className="ctag" style={{ flexShrink: 0 }}>#{t}</span>
       ))}
       <div className="list-meta">{timeAgo(signal.createdAt)}</div>
       <button

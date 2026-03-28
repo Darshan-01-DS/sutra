@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import type { Collection, Signal } from '@/types'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 interface CollectionsViewProps {
   collections: Collection[]
@@ -28,6 +29,7 @@ export function CollectionsView({
   const [newName, setNewName] = useState('')
   const [newIcon, setNewIcon] = useState('◈')
   const [newColor, setNewColor] = useState('#C9A96E')
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
 
   useEffect(() => {
     if (!activeCollectionId) return
@@ -57,9 +59,10 @@ export function CollectionsView({
     }
   }
 
-  const deleteCollection = async (id: string, name: string) => {
-    if (!confirm(`Delete collection "${name}"? Signals will not be deleted.`)) return
-    await fetch(`/api/collections/${id}`, { method: 'DELETE' }).catch(() => null)
+  const deleteCollection = async () => {
+    if (!deleteTarget) return
+    await fetch(`/api/collections/${deleteTarget.id}`, { method: 'DELETE' }).catch(() => null)
+    setDeleteTarget(null)
     onRefreshCollections()
   }
 
@@ -75,6 +78,15 @@ export function CollectionsView({
 
   return (
     <div className="collections-view">
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete collection"
+        body={`Remove "${deleteTarget?.name}"? All signals inside will remain safe — only the collection is deleted.`}
+        confirmLabel="Delete"
+        dangerous
+        onConfirm={deleteCollection}
+        onCancel={() => setDeleteTarget(null)}
+      />
       <div className="cv-header">
         <div>
           <div className="cv-title">◇ Collections</div>
@@ -136,7 +148,7 @@ export function CollectionsView({
             <div className="cv-card-count">{(col as any).signalCount ?? 0} signals</div>
             <button
               className="cv-card-delete"
-              onClick={e => { e.stopPropagation(); deleteCollection(col._id, col.name) }}
+              onClick={e => { e.stopPropagation(); setDeleteTarget({ id: col._id, name: col.name }) }}
               title="Delete collection"
             >×</button>
           </div>

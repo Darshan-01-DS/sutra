@@ -153,11 +153,37 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── PRODUCT PREVIEW ── */}
+      <div style={{ marginTop: 48, marginBottom: 32, paddingInline: 24, position: 'relative', zIndex: 1, maxWidth: 860, marginInline: 'auto' }}>
+        <div style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 18, padding: 10, boxShadow: '0 32px 80px rgba(0,0,0,0.45)', overflow: 'hidden' }}>
+          {/* App bar mockup */}
+          <div style={{ background: 'var(--bg)', borderRadius: 12, padding: '14px 18px', display: 'flex', gap: 10, fontSize: 12, color: 'var(--text3)', borderBottom: '1px solid var(--border)', marginBottom: 12, alignItems: 'center' }}>
+            <span style={{ color: 'var(--accent)', fontWeight: 500 }}>◈</span>
+            <span style={{ color: 'var(--text2)', fontSize: 13 }}>All signals</span>
+            <span style={{ marginLeft: 'auto', fontSize: 11 }}>3 saved · 3 new this week</span>
+          </div>
+          {/* Signal cards mockup */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, padding: '0 4px 4px' }}>
+            {[
+              { type: 'TWEET', color: 'var(--teal)', title: 'The best way to think clearly is to write clearly...', tag: '#productivity' },
+              { type: 'VIDEO', color: 'var(--coral)', title: 'Deep Work — Full Lecture Series by Cal Newport', tag: '#focus' },
+              { type: 'NOTE',  color: 'var(--violet)', title: 'Key insight: complexity scales linearly with connections', tag: '#systems' },
+            ].map((c) => (
+              <div key={c.type} style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 14px 12px', fontSize: 12 }}>
+                <div style={{ color: c.color, fontSize: 9, fontWeight: 600, letterSpacing: '0.1em', marginBottom: 8 }}>{c.type}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.45, marginBottom: 10 }}>{c.title}</div>
+                <div style={{ fontSize: 10, color: 'var(--text3)', background: 'var(--bg4)', display: 'inline-block', padding: '2px 8px', borderRadius: 20, border: '1px solid var(--border)' }}>{c.tag}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* ── SOCIAL PROOF ── */}
       <div className="ld-proof">
         <div className="ld-proof-line" />
         <div className="ld-proof-text">
-          Trusted by researchers, writers, founders, and deep thinkers.
+          Built for people who think deeply. No ads. Your data stays yours.
         </div>
         <div className="ld-proof-line" />
       </div>
@@ -188,6 +214,39 @@ export default function LandingPage() {
               )}
             </>
           ))}
+        </div>
+      </section>
+
+      {/* ── PRICING ── */}
+      <section className="ld-section" id="pricing">
+        <h2 className="ld-section-title">Simple, honest pricing</h2>
+        <p className="ld-section-sub">Start free. Upgrade when you need more power.</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 20, maxWidth: 640, margin: '0 auto', padding: '0 24px' }}>
+          {/* Free */}
+          <div style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 16, padding: '28px 24px' }}>
+            <div style={{ fontSize: 11, letterSpacing: '0.12em', color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 12 }}>Free</div>
+            <div style={{ fontSize: 36, fontWeight: 300, color: 'var(--text)', marginBottom: 4 }}>$0</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 24 }}>forever</div>
+            {['500 signals', 'Basic search', 'Tags & Collections', 'Manual resurface'].map(f => (
+              <div key={f} style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 8, display: 'flex', gap: 8 }}>
+                <span style={{ color: 'var(--accent)' }}>✓</span> {f}
+              </div>
+            ))}
+            <Link href="/register" className="ld-btn-ghost" style={{ display: 'block', textAlign: 'center', marginTop: 24, padding: '10px 0', textDecoration: 'none' }}>Get Started</Link>
+          </div>
+          {/* Pro */}
+          <div style={{ background: 'linear-gradient(135deg, rgba(201,169,110,0.08), rgba(201,169,110,0.04))', border: '1px solid var(--accent-border)', borderRadius: 16, padding: '28px 24px', position: 'relative' }}>
+            <div style={{ position: 'absolute', top: 14, right: 14, fontSize: 9, letterSpacing: '0.12em', background: 'var(--accent)', color: '#000', padding: '3px 8px', borderRadius: 20, fontWeight: 600 }}>POPULAR</div>
+            <div style={{ fontSize: 11, letterSpacing: '0.12em', color: 'var(--accent)', textTransform: 'uppercase', marginBottom: 12 }}>Pro</div>
+            <div style={{ fontSize: 36, fontWeight: 300, color: 'var(--text)', marginBottom: 4 }}>$9<span style={{ fontSize: 14, color: 'var(--text3)' }}>/mo</span></div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 24 }}>billed monthly</div>
+            {['Unlimited signals', 'AI auto-tagging', 'Semantic search', 'Knowledge graph', 'Smart resurface (SM-2)', 'Ask AI'].map(f => (
+              <div key={f} style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 8, display: 'flex', gap: 8 }}>
+                <span style={{ color: 'var(--accent)' }}>✓</span> {f}
+              </div>
+            ))}
+            <Link href="/register" className="ld-cta-primary" style={{ display: 'block', textAlign: 'center', marginTop: 24, padding: '10px 0', textDecoration: 'none' }}>Start Pro Trial →</Link>
+          </div>
         </div>
       </section>
 

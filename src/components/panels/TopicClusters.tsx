@@ -48,7 +48,7 @@ export function TopicClusters({ stats, loading, onTopicClick }: Props) {
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
-                  <div className="cluster-name" style={{ fontSize: 13, fontWeight: 500 }}>{topic.name}</div>
+                  <div className="cluster-name" style={{ fontSize: 13, fontWeight: 500 }}>#{topic.name}</div>
                   <div className="cluster-count" style={{ fontSize: 11, opacity: 0.6 }}>{topic.count}</div>
                 </div>
                 <div className="cluster-bar" style={{ height: 3, background: 'var(--bg4)', borderRadius: 2, overflow: 'hidden' }}>

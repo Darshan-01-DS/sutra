@@ -152,22 +152,42 @@ export async function getEmbeddingWithKey(text: string, ai?: AIConfig): Promise<
   if (!key) return []
 
   try {
-    const { default: OpenAI } = await import('openai')
-    // Embeddings usually only work gracefully with OpenAI directly, unless the custom provider specifically supports it (e.g. Ollama with nomic-embed-text)
-    // We'll pass the baseURL if they provided one, but fallback to OpenAI defaults otherwise for embedding explicitly.
-    const openai = new OpenAI({ 
-      apiKey: key,
-      baseURL: ai?.baseUrl || undefined
-    })
+    if (ai?.provider === 'gemini') {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'models/text-embedding-004',
+          content: { parts: [{ text }] },
+        }),
+      })
+      if (!res.ok) throw new Error(`Gemini Embedding error: ${res.statusText}`)
+      const data = await res.json()
+      return data.embedding.values
+    } else if (ai?.provider === 'openrouter') {
+      const res = await fetch('https://openrouter.ai/api/v1/embeddings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ input: text.slice(0, 8000), model: 'openai/text-embedding-3-small' }),
+      })
+      if (!res.ok) throw new Error(`OpenRouter Embedding error: ${res.statusText}`)
+      const data = await res.json()
+      return data.data[0].embedding
+    } else {
+      const { default: OpenAI } = await import('openai')
+      const openai = new OpenAI({ 
+        apiKey: key,
+        baseURL: ai?.baseUrl || undefined
+      })
 
-    const res = await openai.embeddings.create({
-      // We assume standard text-embedding-3-small unless custom model is not compatible. 
-      // Most third-party completions APIs don't do embeddings, so we just try.
-      model: 'text-embedding-3-small',
-      input: text.slice(0, 8000),
-    })
-    return res.data[0].embedding
-  } catch {
+      const res = await openai.embeddings.create({
+        model: 'text-embedding-3-small',
+        input: text.slice(0, 8000),
+      })
+      return res.data[0].embedding
+    }
+  } catch (e: any) {
+    console.error('getEmbedding error:', e.message)
     return []
   }
 }

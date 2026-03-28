@@ -447,6 +447,18 @@ export function FullScreenGraph({
               <div>Building knowledge graph…</div>
             </div>
           )}
+          {payload && payload.nodes.length === 0 && (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, color: 'var(--text3)' }}>
+              <div style={{ fontSize: 56, opacity: 0.15 }}>◎</div>
+              <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--text2)' }}>Your knowledge graph is empty</div>
+              <div style={{ fontSize: 13, maxWidth: 340, textAlign: 'center', lineHeight: 1.7, color: 'var(--text3)' }}>
+                Save a few signals and add an AI API key in Settings to enable semantic connections between your saved content.
+              </div>
+              <a href="/account" className="btn-primary" style={{ fontSize: 13, padding: '10px 22px', textDecoration: 'none' }}>
+                Add API Key →
+              </a>
+            </div>
+          )}
           <svg ref={svgRef} className="graph-full-svg" />
 
           {selectedCard && (

@@ -26,13 +26,19 @@ export async function GET(req: NextRequest) {
   ).sort({ createdAt: -1 }).limit(100).lean()
 
   // Build nodes
-  const nodes = signals.map(s => ({
-    id:     String(s._id),
-    title:  String(s.title || '').slice(0, 25) + (String(s.title || '').length > 25 ? '…' : ''),
-    type:   s.type,
-    tags:   s.tags || [],
-    topics: s.topics || [],
-  }))
+  const nodes = signals.map(s => {
+    const rawTitle = (s.title && !String(s.title).startsWith('http'))
+      ? String(s.title)
+      : (s.source || 'Untitled')
+    const truncated = rawTitle.slice(0, 25) + (rawTitle.length > 25 ? '…' : '')
+    return {
+      id:     String(s._id),
+      title:  truncated,
+      type:   s.type,
+      tags:   s.tags || [],
+      topics: s.topics || [],
+    }
+  })
 
   // Build edges using the similarity engine
   const edges: {source:string; target:string; strength:string; score:number; reasons:string[]}[] = []
