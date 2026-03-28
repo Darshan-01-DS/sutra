@@ -93,15 +93,17 @@ export async function POST(req: NextRequest) {
     let embedding: number[] = []
 
     try {
-      const [tagResult, embedResult] = await Promise.all([
-        autoTag(file.name, `Uploaded ${signalType} file: ${file.name}${notes ? '. Notes: ' + notes : ''}`, aiConfig),
-        getEmbeddingWithKey(textForAI, aiConfig),
-      ])
+      const tagResult = await autoTag(file.name, `Uploaded ${signalType} file: ${file.name}${notes ? '. Notes: ' + notes : ''}`, aiConfig)
       tags = tagResult.tags
       topics = tagResult.topics
-      embedding = embedResult
-    } catch {
-      // AI features optional
+    } catch (e: any) {
+      console.warn('AutoTag upload failed:', e.message)
+    }
+
+    try {
+      embedding = await getEmbeddingWithKey(textForAI, aiConfig)
+    } catch (e: any) {
+      console.warn('Embedding upload failed:', e.message)
     }
 
     // Build signal data

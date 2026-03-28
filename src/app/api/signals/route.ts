@@ -115,22 +115,24 @@ export async function POST(req: NextRequest) {
     // Attach userId
     if (userId) signalData.userId = userId
 
-    // AI auto-tagging + embedding (in parallel, gracefully optional)
+    // AI auto-tagging + embedding (separated to prevent one failure silently killing the other)
     const textForAI = `${signalData.title} ${signalData.content ?? ''}`.trim()
     let tags: string[] = []
     let topics: string[] = []
     let embedding: number[] = []
 
     try {
-      const [tagResult, embedResult] = await Promise.all([
-        autoTag(signalData.title, signalData.content, aiConfig),
-        getEmbeddingWithKey(textForAI, aiConfig),
-      ])
+      const tagResult = await autoTag(signalData.title, signalData.content, aiConfig)
       tags = tagResult.tags
       topics = tagResult.topics
-      embedding = embedResult
-    } catch {
-      // AI features are optional — don't fail the save
+    } catch (e: any) {
+      console.warn('AutoTag failed:', e.message)
+    }
+
+    try {
+      embedding = await getEmbeddingWithKey(textForAI, aiConfig)
+    } catch (e: any) {
+      console.warn('Embedding failed:', e.message)
     }
 
     // Merge user-provided tags with AI-generated tags (user tags take priority)
