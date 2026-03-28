@@ -93,11 +93,11 @@ export async function POST(req: NextRequest) {
     const pdfRes = await fetch(pdfUrl)
     if (!pdfRes.ok) return NextResponse.json({ error: 'Failed to fetch PDF' }, { status: 502 })
 
-    // 4. Extract text with pdf-parse (v2.4.5+)
+    // 4. Extract text with stable legacy pdf-parse@1.1.1
     const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer())
-    const { PDFParse } = require('pdf-parse')
-    const parser = new PDFParse({ data: pdfBuffer })
-    const pdfData = await parser.getText()
+    const pdfParse = require('pdf-parse')
+    const parseFn = pdfParse.default || pdfParse
+    const pdfData = await parseFn(pdfBuffer, { max: 0 })
     const rawText = pdfData.text?.trim() ?? ''
 
     if (!rawText || rawText.length < 50) {
