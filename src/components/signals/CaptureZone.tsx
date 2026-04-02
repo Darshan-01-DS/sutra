@@ -175,6 +175,9 @@ export function CaptureZone({ onSave, onUploadFile, saving, captureRef, collecti
       body: JSON.stringify({ name, icon: emoji, color: '#C9A96E' }),
     })
     const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data?.error ?? 'Failed to create collection')
+    }
     return data
   }, [onCreateCollection])
 

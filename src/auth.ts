@@ -9,9 +9,21 @@ import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 
 const loginSchema = z.object({
-  email:    z.string().email().max(255),
+  email: z.string().email().max(255),
   password: z.string().min(8).max(128),
 })
+
+async function findUserByEmail(email?: string | null) {
+  if (!email) return null
+  await connectDB()
+  return UserModel.findOne({ email }).select('name email image hasSeenOnboarding').lean() as Promise<{
+    _id: unknown
+    name?: string | null
+    email?: string | null
+    image?: string | null
+    hasSeenOnboarding?: boolean
+  } | null>
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
@@ -27,76 +39,100 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         await connectDB()
         const { email, password } = parsed.data
 
-        const user = await UserModel.findOne({ email }).select('+password +loginAttempts +lockUntil').lean()
-        if (!user) { await new Promise(r => setTimeout(r, 300)); return null }
+        const user = await UserModel.findOne({ email }).select('+password +loginAttempts +lockUntil').lean() as {
+          _id: unknown
+          name?: string | null
+          email?: string | null
+          image?: string | null
+          password?: string | null
+          loginAttempts?: number
+          lockUntil?: Date | null
+        } | null
 
+        if (!user) { await new Promise((resolve) => setTimeout(resolve, 300)); return null }
         if (user.lockUntil && user.lockUntil > new Date()) return null
 
-        const valid = user.password && await bcrypt.compare(password, user.password)
-
+        const valid = user.password ? await bcrypt.compare(password, user.password) : false
         if (!valid) {
           const attempts = (user.loginAttempts || 0) + 1
-          const update: any = { loginAttempts: attempts }
+          const update: { loginAttempts: number; lockUntil?: Date } = { loginAttempts: attempts }
           if (attempts >= 5) update.lockUntil = new Date(Date.now() + 15 * 60 * 1000)
           await UserModel.updateOne({ email }, update)
           return null
         }
 
         await UserModel.updateOne({ email }, { loginAttempts: 0, lockUntil: null, lastActiveAt: new Date() })
-
-        // Return MongoDB _id as id so JWT picks it up
         return { id: String(user._id), name: user.name, email: user.email, image: user.image }
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user, account, profile }) {
-      // On initial sign-in, user object is present
+    async jwt({ token, user, account }) {
       if (user) {
-        // For credentials: user.id is already the MongoDB _id
-        // For OAuth: we need to look up or create the MongoDB user
         if (account && account.provider !== 'credentials') {
           await connectDB()
-          let dbUserId: string
-          const foundUser = await UserModel.findOne({ email: user.email }).lean()
+          const foundUser = await UserModel.findOne({ email: user.email }).lean() as { _id: unknown; hasSeenOnboarding?: boolean } | null
           if (!foundUser) {
             const created = await UserModel.create({
-              name:         user.name || user.email!.split('@')[0],
-              email:        user.email,
-              image:        user.image,
-              provider:     account.provider as any,
+              name: user.name || user.email!.split('@')[0],
+              email: user.email,
+              image: user.image,
+              provider: account.provider,
               emailVerified: new Date(),
             })
-            dbUserId = String(created._id)
+            token.userId = String(created._id)
+            token.hasSeenOnboarding = false
           } else {
-            await UserModel.updateOne({ _id: foundUser._id }, { lastActiveAt: new Date() })
-            dbUserId = String(foundUser._id)
+            await UserModel.updateOne({ _id: foundUser._id }, { lastActiveAt: new Date(), image: user.image ?? undefined, name: user.name ?? undefined })
+            token.userId = String(foundUser._id)
+            token.hasSeenOnboarding = foundUser.hasSeenOnboarding ?? false
           }
-          token.userId = dbUserId
-          token.hasSeenOnboarding = (foundUser as any)?.hasSeenOnboarding ?? false
         } else {
-          // Credentials provider — user.id is MongoDB _id
           token.userId = user.id
-          const credUser = await UserModel.findById(user.id).lean()
-          token.hasSeenOnboarding = (credUser as any)?.hasSeenOnboarding ?? false
+          const credUser = await UserModel.findById(user.id).select('hasSeenOnboarding').lean() as { hasSeenOnboarding?: boolean } | null
+          token.hasSeenOnboarding = credUser?.hasSeenOnboarding ?? false
         }
       }
+
+      if (!token.userId && token.email) {
+        const dbUser = await findUserByEmail(token.email)
+        if (dbUser) {
+          token.userId = String(dbUser._id)
+          token.hasSeenOnboarding = dbUser.hasSeenOnboarding ?? false
+        }
+      }
+
       return token
     },
     async session({ session, token }) {
-      if (session.user && token.userId) {
-        session.user.id = token.userId as string
-        ;(session as any).hasSeenOnboarding = token.hasSeenOnboarding ?? false
-        // Always read fresh name/image from DB so profile changes are immediate
-        try {
-          await connectDB()
-          const dbUser = await UserModel.findById(token.userId).select('name image').lean() as any
-          if (dbUser) {
-            session.user.name  = dbUser.name  ?? session.user.name
-            session.user.image = dbUser.image ?? session.user.image
-          }
-        } catch {}
+      if (!session.user) return session
+
+      let resolvedUserId = typeof token.userId === 'string' ? token.userId : undefined
+      let dbUser: Awaited<ReturnType<typeof findUserByEmail>> = null
+
+      if (!resolvedUserId && session.user.email) {
+        dbUser = await findUserByEmail(session.user.email)
+        resolvedUserId = dbUser ? String(dbUser._id) : undefined
       }
+
+      if (resolvedUserId) {
+        session.user.id = resolvedUserId
+      }
+
+      ;(session as { hasSeenOnboarding?: boolean }).hasSeenOnboarding = (typeof token.hasSeenOnboarding === 'boolean' ? token.hasSeenOnboarding : dbUser?.hasSeenOnboarding) ?? false
+
+      try {
+        await connectDB()
+        const freshUser = resolvedUserId
+          ? await UserModel.findById(resolvedUserId).select('name image').lean() as { name?: string | null; image?: string | null } | null
+          : dbUser
+
+        if (freshUser) {
+          session.user.name = freshUser.name ?? session.user.name
+          session.user.image = freshUser.image ?? session.user.image
+        }
+      } catch {}
+
       return session
     },
   },

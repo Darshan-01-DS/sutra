@@ -1,5 +1,5 @@
 'use client'
-// src/components/signals/CollectionsView.tsx
+// src/components/signals/CollectionsView.tsx — FIXED
 
 import { useState, useEffect } from 'react'
 import type { Collection, Signal } from '@/types'
@@ -13,8 +13,8 @@ interface CollectionsViewProps {
   onRefreshCollections: () => void
 }
 
-const COLLECTION_ICONS = ['◈', '◎', '◇', '△', '◻', '⬡', '✦', '❋', '⬘', '▣']
-const COLLECTION_COLORS = ['#C9A96E', '#9B8FF5', '#4ECDC4', '#E8705A', '#6BCB77', '#F7B731', '#A29BFE', '#55EFC4']
+const COLLECTION_ICONS = ['◈', '◎', '◇', '△', '◻', '⬡', '✦', '❋', '⬘', '▣', '🧠', '📚', '🎯', '⚡']
+const COLLECTION_COLORS = ['#C9A96E', '#9B8FF5', '#4ECDC4', '#E8705A', '#6BCB77', '#F7B731', '#A29BFE', '#FD79A8']
 
 export function CollectionsView({
   collections,
@@ -29,6 +29,8 @@ export function CollectionsView({
   const [newName, setNewName] = useState('')
   const [newIcon, setNewIcon] = useState('◈')
   const [newColor, setNewColor] = useState('#C9A96E')
+  const [saving, setSaving] = useState(false)
+  const [createError, setCreateError] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
 
   useEffect(() => {
@@ -44,26 +46,42 @@ export function CollectionsView({
   }, [activeCollectionId])
 
   const createCollection = async () => {
-    if (!newName.trim()) return
+    const trimmedName = newName.trim()
+    if (!trimmedName) { setCreateError('Please enter a collection name'); return }
+    setSaving(true)
+    setCreateError('')
     try {
-      await fetch('/api/collections', {
+      const res = await fetch('/api/collections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName.trim(), icon: newIcon, color: newColor }),
+        body: JSON.stringify({ name: trimmedName, icon: newIcon, color: newColor }),
       })
+      const data = await res.json()
+      if (!res.ok) {
+        setCreateError(data.error || 'Failed to create collection')
+        return
+      }
       setNewName('')
+      setNewIcon('◈')
+      setNewColor('#C9A96E')
       setCreating(false)
-      onRefreshCollections()
-    } catch {
-      // ignore
+      await onRefreshCollections()
+      // Auto-select the new collection
+      if (data._id) onSelectCollection(data._id)
+    } catch (e: any) {
+      setCreateError(e?.message || 'Network error. Please try again.')
+    } finally {
+      setSaving(false)
     }
   }
 
   const deleteCollection = async () => {
     if (!deleteTarget) return
-    await fetch(`/api/collections/${deleteTarget.id}`, { method: 'DELETE' }).catch(() => null)
-    setDeleteTarget(null)
-    onRefreshCollections()
+    try {
+      await fetch(`/api/collections/${deleteTarget.id}`, { method: 'DELETE' })
+      setDeleteTarget(null)
+      onRefreshCollections()
+    } catch { /* silent */ }
   }
 
   const activeCol = collections.find(c => c._id === activeCollectionId)
@@ -87,13 +105,14 @@ export function CollectionsView({
         onConfirm={deleteCollection}
         onCancel={() => setDeleteTarget(null)}
       />
+
       <div className="cv-header">
         <div>
           <div className="cv-title">◇ Collections</div>
           <div className="cv-sub">{collections.length} collection{collections.length !== 1 ? 's' : ''}</div>
         </div>
-        <button className="btn-primary" onClick={() => setCreating(v => !v)}>
-          {creating ? 'Cancel' : '+ New'}
+        <button className="btn-primary" onClick={() => { setCreating(v => !v); setCreateError('') }}>
+          {creating ? 'Cancel' : '+ New Collection'}
         </button>
       </div>
 
@@ -104,56 +123,81 @@ export function CollectionsView({
             className="cv-input"
             placeholder="Collection name…"
             value={newName}
-            onChange={e => setNewName(e.target.value)}
+            onChange={e => { setNewName(e.target.value); setCreateError('') }}
             onKeyDown={e => e.key === 'Enter' && createCollection()}
             autoFocus
           />
+          {createError && (
+            <div style={{ fontSize: 12, color: 'var(--coral)', padding: '6px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>⚠</span> {createError}
+            </div>
+          )}
+          <div className="form-label" style={{ marginTop: 4 }}>Icon</div>
           <div className="cv-icon-row">
             {COLLECTION_ICONS.map(ic => (
               <button
                 key={ic}
                 className={`cv-icon-btn ${newIcon === ic ? 'on' : ''}`}
                 onClick={() => setNewIcon(ic)}
+                type="button"
               >{ic}</button>
             ))}
           </div>
+          <div className="form-label">Color</div>
           <div className="cv-color-row">
             {COLLECTION_COLORS.map(c => (
               <button
                 key={c}
+                type="button"
                 className={`cv-color-btn ${newColor === c ? 'on' : ''}`}
                 style={{ background: c }}
                 onClick={() => setNewColor(c)}
               />
             ))}
           </div>
-          <button className="btn-primary" onClick={createCollection} disabled={!newName.trim()}>
-            Create collection →
+          <button
+            className="btn-primary"
+            onClick={createCollection}
+            disabled={!newName.trim() || saving}
+            style={{ marginTop: 8 }}
+          >
+            {saving ? 'Creating…' : 'Create collection →'}
           </button>
         </div>
       )}
 
       {/* Collections grid */}
-      <div className="cv-grid">
-        {collections.map(col => (
-          <div
-            key={col._id}
-            className={`cv-card ${activeCollectionId === col._id ? 'active' : ''}`}
-            onClick={() => onSelectCollection(col._id)}
-          >
-            <div className="cv-card-icon" style={{ background: `${col.color}20`, color: col.color }}>
-              {col.icon ?? '◈'}
+      {collections.length === 0 && !creating ? (
+        <div className="cv-empty" style={{ padding: '48px 20px', textAlign: 'center' }}>
+          <div className="cv-empty-icon" style={{ fontSize: 40, opacity: 0.2, marginBottom: 16 }}>◇</div>
+          <div className="cv-empty-text">No collections yet</div>
+          <div className="cv-empty-sub" style={{ marginTop: 8 }}>Create your first collection to organize signals.</div>
+          <button className="btn-primary" style={{ marginTop: 16 }} onClick={() => setCreating(true)}>
+            + Create collection
+          </button>
+        </div>
+      ) : (
+        <div className="cv-grid">
+          {collections.map(col => (
+            <div
+              key={col._id}
+              className={`cv-card ${activeCollectionId === col._id ? 'active' : ''}`}
+              onClick={() => onSelectCollection(col._id)}
+            >
+              <div className="cv-card-icon" style={{ background: `${col.color}20`, color: col.color }}>
+                {col.icon ?? '◈'}
+              </div>
+              <div className="cv-card-name">{col.name}</div>
+              <div className="cv-card-count">{(col as any).signalCount ?? 0} signals</div>
+              <button
+                className="cv-card-delete"
+                onClick={e => { e.stopPropagation(); setDeleteTarget({ id: col._id, name: col.name }) }}
+                title="Delete collection"
+              >×</button>
             </div>
-            <div className="cv-card-name">{col.name}</div>
-            <div className="cv-card-count">{(col as any).signalCount ?? 0} signals</div>
-            <button
-              className="cv-card-delete"
-              onClick={e => { e.stopPropagation(); setDeleteTarget({ id: col._id, name: col.name }) }}
-              title="Delete collection"
-            >×</button>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Active collection signals */}
       {activeCol && (

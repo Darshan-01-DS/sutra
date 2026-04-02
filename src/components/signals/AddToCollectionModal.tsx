@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Collection } from '@/types'
 
-const EMOJI_OPTIONS = ['📁', '🧠', '🎨', '⚡', '🔖', '💡', '🌱', '🚀', '📚', '🗂️', '🔬', '💼']
+const EMOJI_OPTIONS = ['📌', '🧠', '🎨', '⚡', '🔖', '💡', '🌱', '🚀', '📚', '🗂️', '🔬', '💼']
 
 interface AddToCollectionModalProps {
   isOpen: boolean
@@ -105,6 +105,8 @@ export default function AddToCollectionModal({
       setNewName('')
       setEmojiIdx(0)
       setShowNewForm(false)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to create collection')
     } finally {
       setCreating(false)
     }
@@ -209,7 +211,7 @@ export default function AddToCollectionModal({
                   onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                 >
                   <span style={{ fontSize: '17px', width: '22px', textAlign: 'center', flexShrink: 0 }}>
-                    {(c as any).icon ?? (c as any).emoji ?? '📁'}
+                    {(c as any).icon ?? (c as any).emoji ?? '📌'}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{

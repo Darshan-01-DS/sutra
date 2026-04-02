@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sutra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:           #0A0A0C;
+      --bg2:          #111114;
+      --bg3:          #18181D;
+      --bg4:          #1F1F26;
+      --bg5:          #27272F;
+      --border:       rgba(255,255,255,0.06);
+      --border2:      rgba(255,255,255,0.10);
+      --border3:      rgba(255,255,255,0.18);
+      --text:         #EEECEA;
+      --text2:        #8A8895;
+      --text3:        #4A4A58;
+      --accent:       #C9A96E;
+      --accent2:      #A07840;
+      --accent-bg:    rgba(201,169,110,0.08);
+      --accent-border:rgba(201,169,110,0.22);
+      --green:        #4a9a40;
+      --green-bg:     rgba(74,154,64,0.08);
+      --green-border: rgba(74,154,64,0.25);
+      --coral:        #E8705A;
+      --coral-bg:     rgba(232,112,90,0.08);
+      --coral-border: rgba(232,112,90,0.25);
+      --violet:       #9B8FF5;
+      --r:            10px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 340px;
+      min-height: 420px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Geist', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    .logo-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--bg2);
+      border: 1.5px solid var(--accent-border);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .logo-text { line-height: 1.1; }
+    .logo-name {
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-size: 15px;
+      color: var(--text);
+      letter-spacing: 0.01em;
+    }
+    .logo-sub {
+      font-size: 9px;
+      color: var(--text3);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-top: 1px;
+    }
+
+    .header-actions { display: flex; gap: 6px; align-items: center; }
+
+    .icon-btn {
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--border2);
+      border-radius: 7px;
+      background: none;
+      color: var(--text3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .icon-btn:hover { background: var(--bg3); color: var(--text2); border-color: var(--border3); }
+
+    /* ── PAGE PREVIEW ── */
+    .page-preview {
+      margin: 12px 14px 0;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 11px 12px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      animation: slideUp 0.2s ease both;
+    }
+
+    .page-favicon {
+      width: 32px;
+      height: 32px;
+      background: var(--bg4);
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .page-favicon img { width: 20px; height: 20px; object-fit: contain; }
+
+    .page-info { flex: 1; min-width: 0; }
+    .page-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .page-meta {
+      font-size: 10.5px;
+      color: var(--text3);
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .page-type-badge {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* ── NOT LOGGED IN STATE ── */
+    .auth-state {
+      padding: 32px 20px;
+      text-align: center;
+      display: none;
+    }
+    .auth-state.visible { display: block; }
+    .auth-icon { font-size: 32px; margin-bottom: 14px; opacity: 0.4; }
+    .auth-title { font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+    .auth-sub { font-size: 12px; color: var(--text2); line-height: 1.5; margin-bottom: 20px; }
+    .auth-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 36px;
+      padding: 0 18px;
+      background: var(--accent);
+      color: #0A0A0C;
+      border: none;
+      border-radius: var(--r);
+      font-family: 'Geist', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .auth-btn:hover { opacity: 0.88; }
+
+    /* ── MAIN CONTENT ── */
+    .main-content { display: block; }
+    .main-content.hidden { display: none; }
+
+    /* ── SAVE TYPE ── */
+    .section-label {
+      font-size: 9.5px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text3);
+      padding: 12px 14px 6px;
+    }
+
+    .intent-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      padding: 0 14px;
+    }
+
+    .intent-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 11px;
+      border-radius: 7px;
+      background: transparent;
+      border: 1px solid var(--border2);
+      color: var(--text2);
+      font-size: 11.5px;
+      font-family: 'Geist', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .intent-btn:hover { border-color: var(--border3); color: var(--text); background: var(--bg3); }
+    .intent-btn.active {
+      background: var(--accent-bg);
+      border-color: var(--accent-border);
+      color: var(--accent);
+    }
+
+    /* ── NOTE INPUT ── */
+    .note-wrap {
+      padding: 10px 14px 0;
+    }
+    .note-input-row {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      transition: border-color 0.15s;
+    }
+    .note-input-row:focus-within { border-color: var(--accent-border); }
+    .note-input-row svg { flex-shrink: 0; margin-top: 1px; color: var(--text3); }
+    .note-input {
+      background: transparent;
+      border: none;
+      outline: none;
+      font-size: 12px;
+      color: var(--text2);
+      width: 100%;
+      font-family: 'Geist', sans-serif;
+      resize: none;
+      line-height: 1.5;
+    }
+    .note-input::placeholder { color: var(--text3); }
+
+    /* ── COLLECTION + TAGS ROW ── */
+    .meta-row {
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .meta-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11.5px;
+      color: var(--text3);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: 'Geist', sans-serif;
+      padding: 0;
+      transition: color 0.15s;
+    }
+    .meta-btn:hover { color: var(--text2); }
+    .meta-btn.has-value { color: var(--accent); }
+
+    .meta-divider { width: 1px; height: 14px; background: var(--border2); }
+
+    /* ── TAGS ROW ── */
+    .tags-area {
+      padding: 0 14px 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      min-height: 26px;
+    }
+
+    .tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10.5px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: var(--bg4);
+      border: 1px solid var(--border);
+      color: var(--text3);
+    }
+    .tag-chip.ai-tag {
+      background: var(--green-bg);
+      border-color: var(--green-border);
+      color: #4a9a40;
+    }
+    .tag-chip.loading {
+      animation: pulse 1.5s ease infinite;
+    }
+
+    /* ── COLLECTION DROPDOWN ── */
+    .collection-dropdown {
+      display: none;
+      margin: 0 14px 8px;
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      border-radius: var(--r);
+      overflow: hidden;
+    }
+    .collection-dropdown.visible { display: block; }
+    .col-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      font-size: 12px;
+      color: var(--text2);
+      cursor: pointer;
+      transition: background 0.1s;
+      border-bottom: 1px solid var(--border);
+    }
+    .col-option:last-child { border-bottom: none; }
+    .col-option:hover { background: var(--bg4); color: var(--text); }
+    .col-option.selected { background: var(--accent-bg); color: var(--accent); }
+    .col-icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .col-empty { padding: 16px; text-align: center; font-size: 12px; color: var(--text3); }
+
+    /* ── SAVE BUTTON ── */
+    .save-area {
+      padding: 10px 14px 14px;
+    }
+
+    .save-btn {
+      width: 100%;
+      height: 40px;
+      background: var(--accent);
+      color: #0A0A0C;
+      border: none;
+      border-radius: var(--r);
+      font-family: 'Geist', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      transition: all 0.15s;
+    }
+    .save-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+    .save-btn:active { transform: scale(0.98); }
+    .save-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .save-btn.success {
+      background: var(--green-bg);
+      color: #4a9a40;
+      border: 1px solid var(--green-border);
+    }
+    .save-btn.error {
+      background: var(--coral-bg);
+      color: var(--coral);
+      border: 1px solid var(--coral-border);
+    }
+
+    /* ── FOOTER ── */
+    .footer {
+      padding: 8px 14px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid var(--border);
+    }
+    .footer-stats {
+      font-size: 10.5px;
+      color: var(--text3);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .footer-stats span { color: var(--accent); font-weight: 500; }
+    .footer-link {
+      font-size: 10.5px;
+      color: var(--text3);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.15s;
+      text-decoration: none;
+      background: none;
+      border: none;
+      font-family: 'Geist', sans-serif;
+    }
+    .footer-link:hover { color: var(--accent); }
+
+    /* ── LOADING SCREEN ── */
+    .loading-screen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 180px;
+      gap: 8px;
+      flex-direction: column;
+    }
+    .loading-dots { display: flex; gap: 5px; }
+    .loading-dots span {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: dot-pulse 1.2s ease-in-out infinite;
+    }
+    .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+    .loading-text { font-size: 11px; color: var(--text3); }
+
+    /* ── SUCCESS OVERLAY ── */
+    .success-overlay {
+      display: none;
+      padding: 24px 20px;
+      text-align: center;
+      animation: fadeIn 0.3s ease;
+    }
+    .success-overlay.visible { display: block; }
+    .success-ring {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--green-bg);
+      border: 1.5px solid var(--green-border);
+      margin: 0 auto 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .success-title { font-size: 15px; font-weight: 500; margin-bottom: 5px; }
+    .success-sub { font-size: 12px; color: var(--text2); line-height: 1.5; }
+
+    /* ── SETTINGS PANEL ── */
+    .settings-panel {
+      display: none;
+      padding: 14px;
+      animation: slideUp 0.2s ease;
+    }
+    .settings-panel.visible { display: block; }
+    .settings-title { font-size: 13px; font-weight: 500; margin-bottom: 14px; }
+    .settings-row { margin-bottom: 12px; }
+    .settings-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 5px; }
+    .settings-input {
+      width: 100%;
+      height: 34px;
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      border-radius: 7px;
+      padding: 0 10px;
+      color: var(--text);
+      font-family: 'Geist Mono', monospace;
+      font-size: 11.5px;
+      outline: none;
+    }
+    .settings-input:focus { border-color: var(--accent-border); }
+    .settings-save-btn {
+      width: 100%;
+      height: 34px;
+      background: var(--accent);
+      color: #0A0A0C;
+      border: none;
+      border-radius: 7px;
+      font-family: 'Geist', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+
+    /* ── ANIMATIONS ── */
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes dot-pulse {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40%           { transform: scale(1.2); opacity: 1; }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; }
+      50%      { opacity: 1; }
+    }
+
+    /* ── DIVIDER ── */
+    .divider { height: 1px; background: var(--border); margin: 0 14px; }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo-row">
+      <div class="logo-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M8 2L13 8L8 14L3 8Z" stroke="#C9A96E" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+          <path d="M8 5L11 8L8 11L5 8Z" fill="#C9A96E" opacity="0.4"/>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <div class="logo-name">Sutra</div>
+        <div class="logo-sub">thinking system</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="settingsToggleBtn" title="Settings">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M8 1.5V3M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M11.5 4.5l1.1-1.1M3.4 12.6l1.1-1.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <button class="icon-btn" id="openDashboardBtn" title="Open Dashboard">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+          <path d="M3 13L13 3M13 3H7M13 3v6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- NOT LOGGED IN STATE -->
+  <div class="auth-state" id="authState">
+    <div class="auth-icon">◈</div>
+    <div class="auth-title">Connect your brain</div>
+    <div class="auth-sub">Sign in to Sutra to save signals from any page you visit.</div>
+    <button class="auth-btn" id="signInBtn">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+        <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Open Sutra to sign in
+    </button>
+  </div>
+
+  <!-- SETTINGS PANEL -->
+  <div class="settings-panel" id="settingsPanel">
+    <div class="settings-title">Extension Settings</div>
+    <div class="settings-row">
+      <div class="settings-label">Sutra URL</div>
+      <input class="settings-input" type="url" id="sutraUrlInput" placeholder="https://sutra.vercel.app">
+    </div>
+    <div class="settings-row">
+      <div class="settings-label">API Key (optional)</div>
+      <input class="settings-input" type="password" id="apiKeyInput" placeholder="sk-...">
+    </div>
+    <button class="settings-save-btn" id="saveSettingsBtn">Save Settings</button>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content" id="mainContent">
+
+    <!-- LOADING -->
+    <div class="loading-screen" id="loadingScreen">
+      <div class="loading-dots"><span></span><span></span><span></span></div>
+      <div class="loading-text">Reading page…</div>
+    </div>
+
+    <!-- SUCCESS OVERLAY -->
+    <div class="success-overlay" id="successOverlay">
+      <div class="success-ring">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <path d="M4 11l5 5 9-9" stroke="#4a9a40" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="success-title">Saved to your brain ✦</div>
+      <div class="success-sub" id="successSub">Signal captured and tagged</div>
+    </div>
+
+    <!-- CAPTURE FORM -->
+    <div id="captureForm">
+
+      <!-- Page Preview -->
+      <div class="page-preview" id="pagePreview">
+        <div class="page-favicon" id="pageFavicon">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4" opacity="0.3"/>
+          </svg>
+        </div>
+        <div class="page-info">
+          <div class="page-title" id="pageTitle">Loading…</div>
+          <div class="page-meta">
+            <span id="pageDomain">—</span>
+            <span style="color:var(--border3)">·</span>
+            <span class="page-type-badge" id="pageTypeBadge">Article</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Save Intent -->
+      <div class="section-label">Save as</div>
+      <div class="intent-grid" id="intentGrid">
+        <button class="intent-btn active" data-intent="signal" onclick="selectIntent(this)">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+            <path d="M5.5 1.5L6.8 4.2 9.8 4.7 7.6 6.8l.5 3L5.5 8.5 2.9 10l.5-3L1.2 4.7l3-.5z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round" fill="none"/>
+          </svg>
+          Save Signal
+        </button>
+        <button class="intent-btn" data-intent="read_later" onclick="selectIntent(this)">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+            <path d="M2 2.5h7M2 5.5h5M2 8.5h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          Read Later
+        </button>
+        <button class="intent-btn" data-intent="watch_later" onclick="selectIntent(this)" id="watchLaterBtn" style="display:none;">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+            <circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M5.5 3v2.5l1.5 1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          Watch Later
+        </button>
+        <button class="intent-btn" data-intent="note" onclick="selectIntent(this)">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+            <path d="M5.5 2v7M2 5.5h7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          Note
+        </button>
+        <button class="intent-btn" data-intent="constellation" onclick="selectIntent(this)">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+            <path d="M5.5 2L6.8 4.7l3 .4-2.2 2.1.5 3L5.5 9l-2.6 1.2.5-3L1.2 5.1l3-.4z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round" fill="none"/>
+          </svg>
+          Constellation ★
+        </button>
+      </div>
+
+      <!-- Note Input -->
+      <div class="note-wrap">
+        <div class="note-input-row">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M2 11l1.5-1.5L10 3l-1.5-1.5L2 8V11z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+          </svg>
+          <textarea class="note-input" id="noteInput" rows="2" placeholder="Add a thought or highlight…"></textarea>
+        </div>
+      </div>
+
+      <!-- Meta Row -->
+      <div class="meta-row">
+        <button class="meta-btn" id="collectionToggleBtn" onclick="toggleCollectionDropdown()">
+          <svg width="12" height="12" viewBox="0 0 13 13" fill="none">
+            <rect x="1.5" y="4" width="10" height="7.5" rx="1.5" stroke="currentColor" stroke-width="1.1"/>
+            <path d="M4.5 4V3a2 2 0 014 0v1" stroke="currentColor" stroke-width="1.1"/>
+          </svg>
+          <span id="collectionLabel">Collection</span>
+        </button>
+        <div class="meta-divider"></div>
+        <button class="meta-btn" id="tagsToggleBtn">
+          <svg width="12" height="12" viewBox="0 0 13 13" fill="none">
+            <path d="M9 2H6L2 6l4.5 4.5L11 6V3a1 1 0 00-2 0z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
+            <circle cx="8" cy="4.5" r="0.8" fill="currentColor"/>
+          </svg>
+          Tags
+        </button>
+      </div>
+
+      <!-- Collection Dropdown -->
+      <div class="collection-dropdown" id="collectionDropdown">
+        <div class="col-empty" id="colLoading">Loading collections…</div>
+      </div>
+
+      <!-- AI Tags -->
+      <div class="tags-area" id="tagsArea">
+        <div class="tag-chip loading">AI tagging…</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Save Button -->
+      <div class="save-area">
+        <button class="save-btn" id="saveBtn" onclick="saveSignal()">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M3 13L13 3M13 3H7M13 3v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Save signal
+        </button>
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">
+        <div class="footer-stats">
+          <span id="signalCount">—</span> signals saved
+        </div>
+        <button class="footer-link" id="viewLibraryBtn">
+          Open library
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+            <path d="M2.5 9.5L9.5 2.5M9.5 2.5H4M9.5 2.5v5.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

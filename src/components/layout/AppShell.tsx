@@ -445,6 +445,9 @@ export function AppShell() {
               body: JSON.stringify({ name, icon: emoji, color: '#C9A96E' }),
             })
             const created = await res.json()
+            if (!res.ok) {
+              throw new Error(created?.error ?? 'Failed to create collection')
+            }
             await refreshCollections()
             return created
           }}

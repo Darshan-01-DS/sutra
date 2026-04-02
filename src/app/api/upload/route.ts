@@ -1,10 +1,9 @@
-// src/app/api/upload/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongodb'
 import SignalModel from '@/lib/models/Signal'
 import { ActivityModel } from '@/lib/models/Collection'
 import { uploadToImageKit } from '@/lib/imagekit'
-import { autoTag, getEmbeddingWithKey, cosineSimilarity } from '@/lib/scraper'
+import { autoTag, generateSummary, getEmbeddingWithKey, cosineSimilarity, sanitizeExtractedText } from '@/lib/scraper'
 import { SignalType } from '@/types'
 import { initialSM2State } from '@/lib/sm2'
 import { auth } from '@/auth'
@@ -12,7 +11,6 @@ import { auth } from '@/auth'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-// Map MIME types to signal types
 function detectSignalType(mimeType: string, fileName: string): SignalType {
   if (mimeType.startsWith('image/')) return 'image'
   if (mimeType === 'application/pdf' || fileName.endsWith('.pdf')) return 'pdf'
@@ -21,16 +19,36 @@ function detectSignalType(mimeType: string, fileName: string): SignalType {
   return 'link'
 }
 
-// Format file size for display
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-// Convert file buffer to Base64 data URI (fallback when ImageKit is unavailable)
 function toBase64DataUri(buffer: Buffer, mimeType: string): string {
   return `data:${mimeType};base64,${buffer.toString('base64')}`
+}
+
+async function extractFileContent(file: File, buffer: Buffer, notes?: string | null): Promise<string | undefined> {
+  try {
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      const pdfParse = require('pdf-parse')
+      const parseFn = pdfParse.default || pdfParse
+      const pdfData = await parseFn(buffer, { max: 0 })
+      const text = sanitizeExtractedText(String(pdfData.text ?? ''), 12000)
+      if (text) return text
+    }
+
+    if (file.type.startsWith('text/') || /\.(txt|md|csv|json)$/i.test(file.name)) {
+      const text = sanitizeExtractedText(buffer.toString('utf8'), 12000)
+      if (text) return text
+    }
+  } catch (error: any) {
+    console.warn('File content extraction failed:', error.message)
+  }
+
+  if (notes?.trim()) return notes.trim()
+  return `Uploaded ${file.name} (${formatSize(file.size)})`
 }
 
 export async function POST(req: NextRequest) {
@@ -39,24 +57,18 @@ export async function POST(req: NextRequest) {
 
     const session = await auth()
     const userId = session?.user?.id
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const formData = await req.formData()
     const file = formData.get('file') as File | null
+    if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+    if (file.size > 10 * 1024 * 1024) return NextResponse.json({ error: 'File too large (max 10MB)' }, { status: 400 })
 
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 })
-    }
-
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File too large (max 10MB)' }, { status: 400 })
-    }
-
-    // Convert File to Buffer
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
-    // Try ImageKit upload, fallback to Base64
     let fileUrl = ''
     let fileId = ''
     let thumbnailUrl = ''
@@ -68,7 +80,6 @@ export async function POST(req: NextRequest) {
       thumbnailUrl = uploaded.thumbnailUrl
     } catch (uploadErr: any) {
       console.warn('ImageKit upload failed, using Base64 fallback:', uploadErr.message)
-      // Fallback: store as Base64 data URI (works for files up to ~5MB)
       if (file.size > 5 * 1024 * 1024) {
         return NextResponse.json({ error: 'File too large for fallback storage (max 5MB without ImageKit)' }, { status: 400 })
       }
@@ -80,20 +91,27 @@ export async function POST(req: NextRequest) {
     const signalType = detectSignalType(file.type, file.name)
     const notes = formData.get('notes') as string | null
     const aiConfig = {
-      key: req.headers.get('x-openai-api-key') ?? undefined,
-      provider: req.headers.get('x-ai-provider') ?? undefined,
-      baseUrl: req.headers.get('x-ai-base-url') ?? undefined,
-      model: req.headers.get('x-ai-model') ?? undefined,
+      key: req.headers.get('x-openai-api-key') || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || undefined,
+      provider: req.headers.get('x-openai-api-key') ? (req.headers.get('x-ai-provider') || undefined) : (process.env.GEMINI_API_KEY ? 'gemini' : undefined),
+      baseUrl: req.headers.get('x-ai-base-url') || undefined,
+      model: req.headers.get('x-ai-model') || undefined,
     }
 
-    // AI auto-tag (gracefully optional)
-    const textForAI = `File: ${file.name} (${signalType}, ${formatSize(file.size)})${notes ? '\n' + notes : ''}`
+    const extractedContent = await extractFileContent(file, buffer, notes)
+    const content = sanitizeExtractedText([
+      extractedContent?.trim(),
+      notes?.trim() && extractedContent?.trim() !== notes.trim() ? `User notes: ${notes.trim()}` : undefined,
+    ].filter(Boolean).join('\n\n'), 12000) ?? `Uploaded ${file.name}`
+
+    const summary = await generateSummary(file.name, content, aiConfig)
+    const textForAI = sanitizeExtractedText(`${file.name}\n${summary ?? ''}\n${content}`.trim(), 12000) ?? `${file.name}\n${content}`
+
     let tags: string[] = []
     let topics: string[] = []
     let embedding: number[] = []
 
     try {
-      const tagResult = await autoTag(file.name, `Uploaded ${signalType} file: ${file.name}${notes ? '. Notes: ' + notes : ''}`, aiConfig)
+      const tagResult = await autoTag(file.name, content || summary, aiConfig)
       tags = tagResult.tags
       topics = tagResult.topics
     } catch (e: any) {
@@ -106,15 +124,12 @@ export async function POST(req: NextRequest) {
       console.warn('Embedding upload failed:', e.message)
     }
 
-    // Build signal data
-    const contentParts = [`Uploaded file: ${file.name} (${formatSize(file.size)})`]
-    if (notes) contentParts.push(`\n\n— User notes —\n${notes}`)
-
     const signalData: any = {
       userId,
       type: signalType,
       title: file.name,
-      content: contentParts.join(''),
+      content,
+      summary,
       source: 'upload',
       thumbnail: signalType === 'image' ? thumbnailUrl : undefined,
       fileUrl,
@@ -125,14 +140,10 @@ export async function POST(req: NextRequest) {
       embedding,
     }
 
-    // Find related signals
     if (embedding.length) {
       try {
-        const relatedFilter: Record<string, any> = { embedding: { $exists: true, $not: { $size: 0 } } }
-        if (userId) relatedFilter.userId = userId
-
         const allSignals = await SignalModel.find(
-          relatedFilter,
+          { userId, embedding: { $exists: true, $not: { $size: 0 } } },
           { _id: 1, embedding: 1 }
         ).lean()
 
@@ -143,12 +154,9 @@ export async function POST(req: NextRequest) {
           .slice(0, 5)
 
         signalData.relatedIds = scored.map(s => s.id)
-      } catch {
-        // Skip
-      }
+      } catch {}
     }
 
-    // Initialize SM-2 state
     const sm2 = initialSM2State()
     signalData.sm2EaseFactor = sm2.easeFactor
     signalData.sm2Interval = sm2.interval
@@ -157,7 +165,7 @@ export async function POST(req: NextRequest) {
 
     const signal = await SignalModel.create(signalData)
 
-    if (signalData.embedding?.length) {
+    if (signalData.embedding?.length && textForAI) {
       const { DocumentChunkModel } = await import('@/lib/models/DocumentChunk')
       await DocumentChunkModel.create({
         userId: signal.userId,
@@ -173,7 +181,6 @@ export async function POST(req: NextRequest) {
       }).catch(err => console.warn('Global RAG index failed:', err.message))
     }
 
-    // Log activity
     await ActivityModel.create({
       type: 'saved',
       message: `Uploaded "${file.name.slice(0, 50)}"`,
@@ -185,7 +192,7 @@ export async function POST(req: NextRequest) {
     if (tags.length) {
       await ActivityModel.create({
         type: 'tagged',
-        message: `AI tagged "${file.name.slice(0, 40)}" → ${tags.slice(0, 3).join(', ')}`,
+        message: `AI tagged "${file.name.slice(0, 40)}" -> ${tags.slice(0, 3).join(', ')}`,
         signalId: signal._id,
         signalTitle: signal.title,
         color: '#9B8FF5',
