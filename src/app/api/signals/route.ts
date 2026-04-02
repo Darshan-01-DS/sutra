@@ -3,7 +3,7 @@ import { auth } from '@/auth'
 import { connectDB } from '@/lib/mongodb'
 import { ActivityModel } from '@/lib/models/Collection'
 import SignalModel from '@/lib/models/Signal'
-import { autoTag, cosineSimilarity, generateSummary, getEmbeddingWithKey, scrapeUrl } from '@/lib/scraper'
+import { autoTag, cosineSimilarity, generateSummary, getEmbeddingWithKey, scrapeUrl, generateFullContentNote } from '@/lib/scraper'
 import { initialSM2State } from '@/lib/sm2'
 import { SignalType } from '@/types'
 
@@ -125,13 +125,16 @@ export async function POST(req: NextRequest) {
       const meta = await scrapeUrl(url)
       const title = cleanTitle(manualTitle, meta.title || new URL(url).hostname)
       const primaryContent = meta.content?.trim() || meta.description?.trim() || undefined
-      const summary = await generateSummary(title, primaryContent, aiConfig)
+      
+      const enhancedContent = await generateFullContentNote(title, primaryContent, aiConfig) || primaryContent
+
+      const summary = await generateSummary(title, enhancedContent, aiConfig)
 
       signalData = {
         userId: session.user.id,
         url,
         title,
-        content: primaryContent,
+        content: enhancedContent,
         summary,
         source: meta.source,
         thumbnail: meta.thumbnail,

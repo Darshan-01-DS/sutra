@@ -127,6 +127,49 @@ export async function generateSummary(title: string, content?: string, ai?: AICo
   }
 }
 
+export async function generateFullContentNote(title: string, content?: string, ai?: AIConfig): Promise<string | undefined> {
+  const safeContent = sanitizeExtractedText(content, 12000)
+  const isSystemFallback = !ai?.key
+  const key = ai?.key ?? process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY
+  if (!key || !safeContent?.trim()) return safeContent
+
+  const baseUrl = isSystemFallback ? 'https://openrouter.ai/api/v1' : (ai?.baseUrl || undefined)
+  const model = isSystemFallback ? 'openai/gpt-4o-mini' : (ai?.model || 'gpt-4o-mini')
+  
+  // Force OpenRouter for system fallback if the user is using Gemini 
+  const effectiveKey = ai?.provider === 'gemini' ? (process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY ?? key) : key
+  const effectiveBaseUrl = ai?.provider === 'gemini' ? 'https://openrouter.ai/api/v1' : baseUrl
+  const effectiveModel = ai?.provider === 'gemini' ? 'openai/gpt-4o-mini' : model
+
+  if (!effectiveKey) return safeContent
+
+  try {
+    const { default: OpenAI } = await import('openai')
+    const openai = new OpenAI({ apiKey: effectiveKey, baseURL: effectiveBaseUrl })
+    const response = await openai.chat.completions.create({
+      model: effectiveModel,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an expert knowledge curator. Rewrite and structure the provided text into a clean, comprehensive markdown note. Extract only the related, useful content. Remove any junk, menus, or irrelevant text. Use headings, bullet points, and paragraphs where appropriate.'
+        },
+        {
+          role: 'user',
+          content: `Title: ${title}\n\nRaw Extracted Content:\n${safeContent}`
+        }
+      ],
+      max_tokens: 1500,
+      temperature: 0.2,
+    })
+
+    const note = response.choices[0]?.message?.content?.trim()
+    return note || safeContent
+  } catch (error: any) {
+    console.warn('generateFullContentNote failed:', error.message)
+    return safeContent
+  }
+}
+
 export async function scrapeUrl(url: string): Promise<ScrapedMeta> {
   const domain = getDomain(url)
   const type = detectType(url)

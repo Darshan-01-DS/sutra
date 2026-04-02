@@ -3,7 +3,7 @@ import { connectDB } from '@/lib/mongodb'
 import SignalModel from '@/lib/models/Signal'
 import { ActivityModel } from '@/lib/models/Collection'
 import { uploadToImageKit } from '@/lib/imagekit'
-import { autoTag, generateSummary, getEmbeddingWithKey, cosineSimilarity, sanitizeExtractedText } from '@/lib/scraper'
+import { autoTag, generateSummary, getEmbeddingWithKey, cosineSimilarity, sanitizeExtractedText, generateFullContentNote } from '@/lib/scraper'
 import { SignalType } from '@/types'
 import { initialSM2State } from '@/lib/sm2'
 import { auth } from '@/auth'
@@ -98,10 +98,13 @@ export async function POST(req: NextRequest) {
     }
 
     const extractedContent = await extractFileContent(file, buffer, notes)
-    const content = sanitizeExtractedText([
+    const rawContent = sanitizeExtractedText([
       extractedContent?.trim(),
       notes?.trim() && extractedContent?.trim() !== notes.trim() ? `User notes: ${notes.trim()}` : undefined,
     ].filter(Boolean).join('\n\n'), 12000) ?? `Uploaded ${file.name}`
+
+    // Enhance content with AI
+    const content = await generateFullContentNote(file.name, rawContent, aiConfig) || rawContent
 
     const summary = await generateSummary(file.name, content, aiConfig)
     const textForAI = sanitizeExtractedText(`${file.name}\n${summary ?? ''}\n${content}`.trim(), 12000) ?? `${file.name}\n${content}`

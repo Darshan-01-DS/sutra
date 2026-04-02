@@ -111,8 +111,14 @@ export async function POST(req: NextRequest) {
       { _id: 1, title: 1, content: 1, url: 1, source: 1, type: 1, embedding: 1, summary: 1 }
     ).lean()
 
-    let scoredSignals: SearchSignal[] = semanticCandidates
-      .map((signal) => ({
+    const { DocumentChunkModel } = await import('@/lib/models/DocumentChunk')
+    const chunkCandidates = await DocumentChunkModel.find(
+      { userId: session.user.id, embedding: { $exists: true, $not: { $size: 0 } } },
+      { _id: 1, text: 1, documentName: 1, signalId: 1, embedding: 1 }
+    ).lean()
+
+    let scoredSignals: SearchSignal[] = [
+      ...semanticCandidates.map((signal) => ({
         _id: String(signal._id),
         title: signal.title,
         content: signal.content,
@@ -123,10 +129,23 @@ export async function POST(req: NextRequest) {
         score: queryEmbedding.length > 0
           ? cosineSimilarity(queryEmbedding, Array.isArray(signal.embedding) ? signal.embedding : [])
           : 0,
+      })),
+      ...chunkCandidates.map((chunk) => ({
+        _id: String(chunk._id),
+        title: chunk.documentName,
+        content: chunk.text,
+        summary: undefined,
+        url: undefined,
+        source: 'Document Content',
+        type: 'chunk',
+        score: queryEmbedding.length > 0
+          ? cosineSimilarity(queryEmbedding, Array.isArray(chunk.embedding) ? chunk.embedding : [])
+          : 0,
       }))
+    ]
       .filter((signal) => signal.score > 0.28)
       .sort((left, right) => right.score - left.score)
-      .slice(0, 6)
+      .slice(0, 8)
 
     const usingTextFallback = scoredSignals.length === 0
     if (usingTextFallback) {
