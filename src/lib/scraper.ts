@@ -64,12 +64,26 @@ function looksLikeCorruptedText(text: string): boolean {
   return binaryHeaderPattern.test(sample) || replacementCount > 12 || strangeControlCount > 8
 }
 
+/** Detect if a string looks like serialized JSON data (like ytInitialPlayerResponse) */
+function looksLikeSerialisedJSON(text: string): boolean {
+  const trimmed = text.trimStart()
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    // Count opening braces vs total length — JSON has very high ratio of { [ ] } : "
+    const jsonChars = (trimmed.match(/[{}\[\]":,]/g) ?? []).length
+    if (jsonChars / trimmed.length > 0.12) return true
+  }
+  // Also catch var ytInitialPlayerResponse = {...} style blobs
+  if (/var\s+\w+\s*=\s*\{/.test(trimmed.slice(0, 60))) return true
+  return false
+}
+
 export function sanitizeExtractedText(text: string | undefined, maxLength = 4000): string | undefined {
   if (!text) return undefined
 
   const cleaned = takePreview(stripUnsafeCharacters(text), maxLength)
   if (!cleaned) return undefined
   if (looksLikeCorruptedText(cleaned)) return undefined
+  if (looksLikeSerialisedJSON(cleaned)) return undefined
 
   return cleaned
 }
@@ -91,14 +105,32 @@ function isBinaryLikeContentType(contentType: string): boolean {
   return normalized.startsWith('image/') || normalized.startsWith('audio/') || normalized.startsWith('video/') || normalized.includes('octet-stream') || normalized.includes('zip') || normalized.includes('msword') || normalized.includes('spreadsheet') || normalized.includes('presentation')
 }
 
+/** Resolve the best API key and endpoint for OpenRouter/OpenAI calls */
+function resolveOpenRouterConfig(ai?: AIConfig): { key: string | undefined; baseUrl: string; model: string } {
+  const isSystemFallback = !ai?.key
+  const key = ai?.key ?? process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY
+
+  // If the user's provider is Gemini we can't use Gemini for chat — route through OpenRouter
+  if (ai?.provider === 'gemini') {
+    return {
+      key: process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY ?? key,
+      baseUrl: 'https://openrouter.ai/api/v1',
+      model: 'openai/gpt-4o-mini',
+    }
+  }
+
+  return {
+    key,
+    baseUrl: isSystemFallback ? 'https://openrouter.ai/api/v1' : (ai?.baseUrl || 'https://openrouter.ai/api/v1'),
+    model: isSystemFallback ? 'openai/gpt-4o-mini' : (ai?.model || 'gpt-4o-mini'),
+  }
+}
+
 export async function generateSummary(title: string, content?: string, ai?: AIConfig): Promise<string | undefined> {
   const safeContent = sanitizeExtractedText(content, 5000)
   const fallback = heuristicSummary(title, safeContent)
-  const key = ai?.key ?? process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY
+  const { key, baseUrl, model } = resolveOpenRouterConfig(ai)
   if (!key || !safeContent?.trim()) return fallback
-
-  const baseUrl = ai?.baseUrl || 'https://openrouter.ai/api/v1'
-  const model = ai?.model || 'openai/gpt-4o-mini'
 
   try {
     const { default: OpenAI } = await import('openai')
@@ -108,14 +140,14 @@ export async function generateSummary(title: string, content?: string, ai?: AICo
       messages: [
         {
           role: 'system',
-          content: 'Write a crisp 2-3 sentence knowledge summary for a PKMS entry. Keep it factual, dense, and directly useful.'
+          content: 'Write a crisp 2-3 sentence knowledge summary for a personal knowledge management system entry. Be factual, dense, and directly useful. No fluff.'
         },
         {
           role: 'user',
           content: `Title: ${title}\n\nContent:\n${safeContent}`
         }
       ],
-      max_tokens: 180,
+      max_tokens: 200,
       temperature: 0.2,
     })
 
@@ -129,29 +161,25 @@ export async function generateSummary(title: string, content?: string, ai?: AICo
 
 export async function generateFullContentNote(title: string, content?: string, ai?: AIConfig): Promise<string | undefined> {
   const safeContent = sanitizeExtractedText(content, 12000)
-  const isSystemFallback = !ai?.key
-  const key = ai?.key ?? process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY
+  const { key, baseUrl, model } = resolveOpenRouterConfig(ai)
   if (!key || !safeContent?.trim()) return safeContent
-
-  const baseUrl = isSystemFallback ? 'https://openrouter.ai/api/v1' : (ai?.baseUrl || undefined)
-  const model = isSystemFallback ? 'openai/gpt-4o-mini' : (ai?.model || 'gpt-4o-mini')
-  
-  // Force OpenRouter for system fallback if the user is using Gemini 
-  const effectiveKey = ai?.provider === 'gemini' ? (process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY ?? key) : key
-  const effectiveBaseUrl = ai?.provider === 'gemini' ? 'https://openrouter.ai/api/v1' : baseUrl
-  const effectiveModel = ai?.provider === 'gemini' ? 'openai/gpt-4o-mini' : model
-
-  if (!effectiveKey) return safeContent
 
   try {
     const { default: OpenAI } = await import('openai')
-    const openai = new OpenAI({ apiKey: effectiveKey, baseURL: effectiveBaseUrl })
+    const openai = new OpenAI({ apiKey: key, baseURL: baseUrl })
     const response = await openai.chat.completions.create({
-      model: effectiveModel,
+      model,
       messages: [
         {
           role: 'system',
-          content: 'You are an expert knowledge curator. Rewrite and structure the provided text into a clean, comprehensive markdown note. Extract only the related, useful content. Remove any junk, menus, or irrelevant text. Use headings, bullet points, and paragraphs where appropriate.'
+          content: `You are an expert knowledge curator. Your job is to rewrite raw web-scraped text into a clean, structured markdown note.
+
+Rules:
+- Extract ONLY the core relevant content (main article, key facts, explanations)
+- Remove all navigation, ads, cookie notices, menus, footers, JS code, JSON data
+- Structure with clear headings (##), bullet points, and concise paragraphs
+- Keep all important information but remove repetition and fluff
+- If the content is a video (YouTube), write a description of what the video is about based on its title and description only`
         },
         {
           role: 'user',
@@ -159,7 +187,7 @@ export async function generateFullContentNote(title: string, content?: string, a
         }
       ],
       max_tokens: 1500,
-      temperature: 0.2,
+      temperature: 0.15,
     })
 
     const note = response.choices[0]?.message?.content?.trim()
@@ -173,10 +201,11 @@ export async function generateFullContentNote(title: string, content?: string, a
 export async function scrapeUrl(url: string): Promise<ScrapedMeta> {
   const domain = getDomain(url)
   const type = detectType(url)
+  const isYouTube = url.includes('youtube.com') || url.includes('youtu.be')
 
   try {
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Sutrabot/1.0)' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Sutrabot/1.0; +https://sutra.app)' },
       signal: AbortSignal.timeout(8000),
     })
 
@@ -207,43 +236,52 @@ export async function scrapeUrl(url: string): Promise<ScrapedMeta> {
     }
 
     const html = await res.text()
-    const sanitizedHtmlPreview = sanitizeExtractedText(html, 1000)
-    if (!normalizedType.includes('html') && !sanitizedHtmlPreview) {
-      return {
-        title: url.split('/').pop() ?? domain,
-        source: domain,
-        type: detectType(url, normalizedType),
-        content: undefined,
-      }
-    }
-
     const $ = cheerio.load(html)
 
+    // Extract OG/meta data first — always clean
     const title =
-      $('meta[property="og:title"]').attr('content') ||
-      $('meta[name="twitter:title"]').attr('content') ||
-      $('title').text() ||
+      $('meta[property="og:title"]').attr('content')?.trim() ||
+      $('meta[name="twitter:title"]').attr('content')?.trim() ||
+      $('title').text().trim() ||
       url
 
     const description =
-      $('meta[property="og:description"]').attr('content') ||
-      $('meta[name="description"]').attr('content') ||
-      $('meta[name="twitter:description"]').attr('content') ||
+      $('meta[property="og:description"]').attr('content')?.trim() ||
+      $('meta[name="description"]').attr('content')?.trim() ||
+      $('meta[name="twitter:description"]').attr('content')?.trim() ||
       ''
 
     const thumbnail =
-      $('meta[property="og:image"]').attr('content') ||
-      $('meta[name="twitter:image"]').attr('content') ||
+      $('meta[property="og:image"]').attr('content')?.trim() ||
+      $('meta[name="twitter:image"]').attr('content')?.trim() ||
       ''
 
+    // For YouTube, ONLY use meta data — body contains massive JSON blobs
+    if (isYouTube) {
+      const cleanDesc = sanitizeExtractedText(description, 800)
+      return {
+        title: title.slice(0, 300),
+        description: cleanDesc,
+        thumbnail: thumbnail || undefined,
+        source: 'youtube.com',
+        type: 'video',
+        content: cleanDesc, // Only the meta description — clean and relevant
+      }
+    }
+
+    // For all other pages: remove noise elements before extracting text
+    $('script, style, noscript, nav, header, footer, aside, [role="navigation"], [role="banner"], [role="complementary"], .cookie-banner, .ad, .advertisement, #cookie, .menu, .sidebar, .nav, .navbar, .breadcrumb').remove()
+
+    // Try to find the most article-like content element first
     const articleText =
       $('article').text() ||
+      $('[role="main"]').text() ||
       $('main').text() ||
-      $('.post-content, .entry-content, .article-content, .markdown-body').text() ||
+      $('.post-content, .entry-content, .article-content, .markdown-body, .prose, .content-body, .article-body').text() ||
       $('body').text()
 
-    const cleanedArticleText = sanitizeExtractedText(articleText, 4000)
-    const cleanedDescription = sanitizeExtractedText(description, 500)
+    const cleanedArticleText = sanitizeExtractedText(articleText, 6000)
+    const cleanedDescription = sanitizeExtractedText(description, 600)
     const wordCount = normalizeWhitespace(articleText).split(' ').filter(Boolean).length
     const readTime = wordCount > 200 ? `${Math.ceil(wordCount / 200)} min read` : undefined
 
@@ -267,47 +305,62 @@ export async function scrapeUrl(url: string): Promise<ScrapedMeta> {
 }
 
 export async function autoTag(title: string, content?: string, ai?: AIConfig): Promise<{ tags: string[]; topics: string[] }> {
-  const isSystemFallback = !ai?.key
-  const key = ai?.key ?? process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY
-  const safeContent = sanitizeExtractedText(content, 1200)
+  const { key, baseUrl, model } = resolveOpenRouterConfig(ai)
+  const safeContent = sanitizeExtractedText(content, 2000)
 
   if (!key) {
     return { tags: [], topics: [] }
   }
 
-  const baseUrl = isSystemFallback ? 'https://openrouter.ai/api/v1' : (ai?.baseUrl || undefined)
-  const model = isSystemFallback ? 'openai/gpt-4o-mini' : (ai?.model || 'gpt-4o-mini')
-  const effectiveKey = ai?.provider === 'gemini' ? (process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY ?? key) : key
-  const effectiveBaseUrl = ai?.provider === 'gemini' ? 'https://openrouter.ai/api/v1' : baseUrl
-  const effectiveModel = ai?.provider === 'gemini' ? 'openai/gpt-4o-mini' : model
-
   try {
     const { default: OpenAI } = await import('openai')
-    const openai = new OpenAI({ apiKey: effectiveKey, baseURL: effectiveBaseUrl })
+    const openai = new OpenAI({ apiKey: key, baseURL: baseUrl })
 
-    const prompt = `You are an expert knowledge curator. Analyze this saved content and categorize it precisely.
+    const prompt = `You are an expert personal knowledge management system. Analyze this saved content and generate precise tags and topics.
 
-Return ONLY valid JSON with:
-- "tags": 3-6 specific, lowercase keyword tags
-- "topics": 1-3 broad categories in Title Case
+RULES:
+- "tags": 5-8 specific, lowercase, hyphenated keyword tags (like: machine-learning, react-hooks, stoic-philosophy, investment-strategy)
+- "topics": 2-4 broad categories in Title Case (like: Technology, Personal Finance, Science, Philosophy)
+- Tags must be specific to the content — NOT generic words like "article", "link", "content", "web"
+- Focus on the subject matter, key concepts, tools, people, or themes discussed
 
+EXAMPLES:
+Title: "How React Server Components Work"
+{"tags":["react","server-components","nextjs","frontend","web-performance","rendering"],"topics":["Technology","Web Development"]}
+
+Title: "Warren Buffett's Advice on Long-Term Investing"
+{"tags":["warren-buffett","investing","value-investing","long-term","stock-market","wealth"],"topics":["Personal Finance","Investing"]}
+
+NOW ANALYZE:
 Title: ${title}
-${safeContent ? `Content: ${safeContent}` : ''}
+${safeContent ? `Content: ${safeContent.slice(0, 1500)}` : ''}
 
-JSON only:`
+Return ONLY valid JSON:`
 
     const res = await openai.chat.completions.create({
-      model: effectiveModel,
+      model,
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 200,
-      temperature: 0.15,
+      max_tokens: 250,
+      temperature: 0.1,
+      response_format: { type: 'json_object' },
     })
 
-    const text = res.choices[0].message.content ?? '{}'
+    const text = res.choices[0]?.message?.content ?? '{}'
     const clean = text.replace(/```json|```/g, '').trim()
-    return JSON.parse(clean)
+    const parsed = JSON.parse(clean)
+
+    // Validate and clean the output
+    const tags: string[] = Array.isArray(parsed.tags)
+      ? parsed.tags.filter((t: unknown) => typeof t === 'string' && t.length > 0).map((t: string) => t.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 40)).filter((t: string) => t.length > 1)
+      : []
+
+    const topics: string[] = Array.isArray(parsed.topics)
+      ? parsed.topics.filter((t: unknown) => typeof t === 'string' && t.length > 0).slice(0, 4)
+      : []
+
+    return { tags, topics }
   } catch (e: any) {
-    console.warn('Scraper autoTag error:', e.message)
+    console.warn('autoTag error:', e.message)
     return { tags: [], topics: [] }
   }
 }

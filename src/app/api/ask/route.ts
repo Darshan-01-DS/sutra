@@ -36,74 +36,51 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'question is required' }, { status: 400 })
     }
 
-    const apiKey = req.headers.get('x-openai-api-key') ?? undefined
-    const provider = req.headers.get('x-ai-provider') ?? 'openai'
-    const baseUrl = req.headers.get('x-ai-base-url') ?? undefined
-    const modelId = req.headers.get('x-ai-model') ?? 'gpt-4o-mini'
-    const key = apiKey || process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY
-    const targetProvider = apiKey ? provider : process.env.OPENROUTER_API_KEY ? 'openrouter' : 'openai'
-    const targetBaseUrl = apiKey
-      ? baseUrl
+    // Always resolve the best key: user-provided → OpenRouter system → OpenAI system → Gemini system
+    const userApiKey = req.headers.get('x-openai-api-key') ?? undefined
+    const userProvider = req.headers.get('x-ai-provider') ?? undefined
+    const userBaseUrl = req.headers.get('x-ai-base-url') ?? undefined
+    const userModelId = req.headers.get('x-ai-model') ?? undefined
+
+    // System always has a key — never fall back to match-listing mode
+    const effectiveKey = userApiKey || process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY
+    const effectiveProvider = userApiKey ? (userProvider || 'openai') : (process.env.OPENROUTER_API_KEY ? 'openrouter' : process.env.OPENAI_API_KEY ? 'openai' : 'gemini')
+    const effectiveBaseUrl = userApiKey
+      ? userBaseUrl
       : process.env.OPENROUTER_API_KEY
         ? 'https://openrouter.ai/api/v1'
         : undefined
-    const targetModelId = apiKey
-      ? modelId
+    const effectiveModelId = userApiKey
+      ? (userModelId || 'gpt-4o-mini')
       : process.env.OPENROUTER_API_KEY
         ? 'openai/gpt-4o-mini'
         : 'gpt-4o-mini'
 
-    const textSearchResults = await SignalModel.find(
-      { $text: { $search: body.question.trim() }, userId: session.user.id },
-      {
-        score: { $meta: 'textScore' },
-        _id: 1,
-        title: 1,
-        content: 1,
-        url: 1,
-        source: 1,
-        type: 1,
-        summary: 1,
-        embedding: 1,
-      }
-    )
-      .sort({ score: { $meta: 'textScore' } })
-      .limit(6)
-      .lean()
+    // Embedding config — always use Gemini for embeddings (free, accurate)
+    const embeddingKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || effectiveKey
+    const embeddingProvider = process.env.GEMINI_API_KEY ? 'gemini' : (process.env.OPENAI_API_KEY ? 'openai' : effectiveProvider)
 
-    if (!key) {
-      if (!textSearchResults.length) {
-        return NextResponse.json({
-          answer: 'I could not find matching signals in your knowledge base yet. Save a few more links, notes, or files about this topic and try again.',
-          sources: [],
-          fallback: true,
-        })
-      }
-
-      const answer = textSearchResults
-        .slice(0, 3)
-        .map((signal, index) => `[${index + 1}] ${signal.title}: ${(signal.summary || signal.content || signal.title).slice(0, 220)}`)
-        .join('\n\n')
-
-      return NextResponse.json({
-        answer: `Here are the closest matches from your saved knowledge:\n\n${answer}`,
-        sources: textSearchResults.map((signal) => ({
-          _id: String(signal._id),
-          title: signal.title,
-          url: signal.url,
-          source: signal.source,
-          type: signal.type,
-          score: Math.min(0.8, (Number((signal as { score?: number }).score) || 0.5) / 10),
-        })),
-        fallback: true,
-      })
+    // Text search fallback (MongoDB full-text)
+    let textSearchResults: any[] = []
+    try {
+      textSearchResults = await SignalModel.find(
+        { $text: { $search: body.question.trim() }, userId: session.user.id },
+        {
+          score: { $meta: 'textScore' },
+          _id: 1, title: 1, content: 1, url: 1, source: 1, type: 1, summary: 1, embedding: 1,
+        }
+      )
+        .sort({ score: { $meta: 'textScore' } })
+        .limit(8)
+        .lean()
+    } catch {
+      // Text index may not exist — continue with semantic only
     }
 
+    // Semantic search using embeddings
     const queryEmbedding = await getEmbeddingWithKey(body.question.trim(), {
-      key,
-      provider: targetProvider,
-      baseUrl: targetBaseUrl,
-      model: targetModelId,
+      key: embeddingKey,
+      provider: embeddingProvider,
     })
 
     const semanticCandidates = await SignalModel.find(
@@ -111,6 +88,7 @@ export async function POST(req: NextRequest) {
       { _id: 1, title: 1, content: 1, url: 1, source: 1, type: 1, embedding: 1, summary: 1 }
     ).lean()
 
+    // Also search through document chunks (PDFs, uploaded files)
     const { DocumentChunkModel } = await import('@/lib/models/DocumentChunk')
     const chunkCandidates = await DocumentChunkModel.find(
       { userId: session.user.id, embedding: { $exists: true, $not: { $size: 0 } } },
@@ -136,19 +114,20 @@ export async function POST(req: NextRequest) {
         content: chunk.text,
         summary: undefined,
         url: undefined,
-        source: 'Document Content',
+        source: 'PDF Content',
         type: 'chunk',
         score: queryEmbedding.length > 0
           ? cosineSimilarity(queryEmbedding, Array.isArray(chunk.embedding) ? chunk.embedding : [])
           : 0,
       }))
     ]
-      .filter((signal) => signal.score > 0.28)
-      .sort((left, right) => right.score - left.score)
+      .filter((s) => s.score > 0.25)
+      .sort((a, b) => b.score - a.score)
       .slice(0, 8)
 
+    // If no semantic results, use text search fallback
     const usingTextFallback = scoredSignals.length === 0
-    if (usingTextFallback) {
+    if (usingTextFallback && textSearchResults.length > 0) {
       scoredSignals = textSearchResults.map((signal) => ({
         _id: String(signal._id),
         title: signal.title,
@@ -161,37 +140,47 @@ export async function POST(req: NextRequest) {
       }))
     }
 
+    // Nothing found at all
     if (!scoredSignals.length) {
       return NextResponse.json({
-        answer: 'I could not find relevant signals in your knowledge base for this question yet.',
+        answer: "I couldn't find relevant information in your knowledge base for this question. Try saving some articles, PDFs, or notes on this topic first.",
         sources: [],
+        fallback: true,
       })
     }
 
+    // Build context for AI
     const context = scoredSignals
       .map((signal, index) => {
         const sourceText = signal.summary || signal.content || signal.title
-        return `[${index + 1}] "${signal.title}" (${signal.source ?? signal.type})\n${sourceText?.slice(0, 500) ?? ''}`
+        const truncated = sourceText?.slice(0, 600) ?? ''
+        return `[${index + 1}] "${signal.title}" (${signal.source ?? signal.type})\n${truncated}`
       })
       .join('\n\n---\n\n')
 
+    // Generate AI answer — always possible since effectiveKey is always set
     const { default: OpenAI } = await import('openai')
-    const openai = new OpenAI({ apiKey: key, baseURL: targetBaseUrl || undefined })
+    const openai = new OpenAI({ apiKey: effectiveKey, baseURL: effectiveBaseUrl || undefined })
 
     const response = await openai.chat.completions.create({
-      model: targetModelId,
+      model: effectiveModelId,
       messages: [
         {
           role: 'system',
-          content: 'You are a personal knowledge assistant. Answer using only the provided saved knowledge. Cite sources inline like [1], [2], and say clearly when the evidence is partial.',
+          content: `You are a personal knowledge assistant for a thinking system called Sutra. 
+Answer questions using ONLY the provided saved knowledge from the user's library.
+- Cite sources inline using [1], [2], etc.
+- Be concise but thorough — synthesize across sources when relevant.
+- If the knowledge is partial, say so clearly and explain what you found.
+- Write in clean markdown with proper formatting.`,
         },
         {
           role: 'user',
-          content: `Question: ${body.question.trim()}\n\nSaved knowledge:\n${context}\n\nAnswer with citations.`,
+          content: `Question: ${body.question.trim()}\n\nYour saved knowledge:\n${context}\n\nAnswer with citations:`,
         },
       ],
-      max_tokens: 500,
-      temperature: 0.25,
+      max_tokens: 700,
+      temperature: 0.2,
     })
 
     const answer = response.choices[0]?.message?.content?.trim() || 'No answer generated.'

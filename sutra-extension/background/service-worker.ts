@@ -224,7 +224,11 @@ async function handleInstantSave(tab: chrome.tabs.Tab): Promise<void> {
   }
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
+  // Ensure the base URL is always set to localhost for local development
+  // This clears any stale Vercel URL from previous sessions
+  await setBaseUrl('http://localhost:3000')
+
   chrome.contextMenus.create({
     id: 'sutra-save-link',
     title: 'Save link to Sutra',

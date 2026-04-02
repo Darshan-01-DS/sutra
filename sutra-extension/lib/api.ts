@@ -1,4 +1,4 @@
-const DEFAULT_BASE_URL = 'https://sutra-three.vercel.app';
+const DEFAULT_BASE_URL = 'http://localhost:3000';
 const BASE_URL_KEY = 'sutra_base_url';
 const REQUEST_TIMEOUT_MS = 10_000;
 const RETRY_ATTEMPTS = 1;
